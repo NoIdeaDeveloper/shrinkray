@@ -695,6 +695,7 @@ func BuildTempPath(inputPath, tempDir string) string {
 
 // copyFile copies a file from src to dst.
 // Works across filesystems unlike os.Rename.
+// Preserves the source file's permissions and flushes data to disk.
 func copyFile(src, dst string) error {
 	srcFile, err := os.Open(src)
 	if err != nil {
@@ -702,13 +703,22 @@ func copyFile(src, dst string) error {
 	}
 	defer srcFile.Close()
 
-	dstFile, err := os.Create(dst)
+	srcInfo, err := srcFile.Stat()
+	if err != nil {
+		return err
+	}
+
+	dstFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, srcInfo.Mode())
 	if err != nil {
 		return err
 	}
 	defer dstFile.Close()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return err
+	}
+
+	if err := dstFile.Sync(); err != nil {
 		return err
 	}
 
@@ -734,12 +744,13 @@ func FinalizeTranscode(inputPath, tempPath string, replace bool) (finalPath stri
 	originalModTime := inputInfo.ModTime()
 
 	if replace {
-		if err := os.Remove(inputPath); err != nil {
-			return "", fmt.Errorf("failed to remove original file: %w", err)
-		}
-
 		if err := copyFile(tempPath, finalPath); err != nil {
 			return "", fmt.Errorf("failed to copy temp to final location: %w", err)
+		}
+
+		if err := os.Remove(inputPath); err != nil {
+			_ = os.Remove(finalPath)
+			return "", fmt.Errorf("failed to remove original file: %w", err)
 		}
 
 		_ = os.Chtimes(finalPath, originalModTime, originalModTime)
@@ -754,7 +765,9 @@ func FinalizeTranscode(inputPath, tempPath string, replace bool) (finalPath stri
 	}
 
 	if err := copyFile(tempPath, finalPath); err != nil {
-		_ = os.Rename(oldPath, inputPath)
+		if renameErr := os.Rename(oldPath, inputPath); renameErr != nil {
+			return "", fmt.Errorf("failed to copy temp to final location: %w (original preserved at %s)", err, oldPath)
+		}
 		return "", fmt.Errorf("failed to copy temp to final location: %w", err)
 	}
 
