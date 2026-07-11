@@ -1354,6 +1354,7 @@ func (q *Queue) broadcast(event JobEvent) {
 		case ch <- event:
 		default:
 			// Channel full, skip this subscriber
+			log.Printf("[queue] Warning: SSE subscriber channel full, dropping event: %s", event.Type)
 		}
 	}
 }
