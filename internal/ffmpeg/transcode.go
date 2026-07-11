@@ -740,13 +740,14 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer dstFile.Close()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		dstFile.Close()
 		return err
 	}
 
 	if err := dstFile.Sync(); err != nil {
+		dstFile.Close()
 		return err
 	}
 
