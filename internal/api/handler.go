@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	shrinkray "github.com/gwlsn/shrinkray"
@@ -25,6 +26,7 @@ type Handler struct {
 	workerPool *jobs.WorkerPool
 	cfg        *config.Config
 	cfgPath    string
+	cfgMu      sync.RWMutex
 }
 
 // NewHandler creates a new API handler
@@ -602,6 +604,9 @@ func (h *Handler) ClearProcessedHistory(w http.ResponseWriter, r *http.Request) 
 
 // GetConfig handles GET /api/config
 func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
+	h.cfgMu.RLock()
+	defer h.cfgMu.RUnlock()
+
 	// Return a sanitized config (no sensitive paths exposed)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"version":                 shrinkray.Version,
@@ -654,6 +659,9 @@ func (h *Handler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+
+	h.cfgMu.Lock()
+	defer h.cfgMu.Unlock()
 
 	// Only allow updating certain fields
 	if req.OriginalHandling != nil {
@@ -746,6 +754,9 @@ func (h *Handler) ClearCache(w http.ResponseWriter, r *http.Request) {
 
 // ApplyConfig updates runtime configuration from a freshly loaded config.
 func (h *Handler) ApplyConfig(newCfg *config.Config) {
+	h.cfgMu.Lock()
+	defer h.cfgMu.Unlock()
+
 	if newCfg.Workers != h.cfg.Workers {
 		h.workerPool.Resize(newCfg.Workers)
 	}
