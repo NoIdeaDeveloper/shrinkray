@@ -145,6 +145,9 @@ func main() {
 
 	providerName := cfg.Auth.Provider
 	if providerName == "" {
+		if cfg.Auth.Enabled {
+			log.Printf("[auth] Warning: auth is enabled but no provider configured, defaulting to noop (auth disabled)")
+		}
 		providerName = "noop"
 	}
 

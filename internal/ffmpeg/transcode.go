@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -377,6 +378,11 @@ func (t *Transcoder) Pause() bool {
 		return false
 	}
 
+	if runtime.GOOS == "windows" {
+		log.Printf("[transcode] Pause not supported on Windows")
+		return false
+	}
+
 	if err := t.process.Signal(syscall.SIGSTOP); err != nil {
 		log.Printf("[transcode] Failed to pause process: %v", err)
 		return false
@@ -394,6 +400,11 @@ func (t *Transcoder) Resume() bool {
 	defer t.mu.Unlock()
 
 	if t.process == nil || !t.paused {
+		return false
+	}
+
+	if runtime.GOOS == "windows" {
+		log.Printf("[transcode] Resume not supported on Windows")
 		return false
 	}
 
