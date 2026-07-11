@@ -511,9 +511,13 @@ func (t *Transcoder) Transcode(
 		t.mu.Unlock()
 	}()
 
+	// Coordinate goroutines: close progressCh only after both finish
+	var progressWG sync.WaitGroup
+	progressWG.Add(2)
+
 	// Parse progress from stdout
 	go func() {
-		defer close(progressCh)
+		defer progressWG.Done()
 		scanner := bufio.NewScanner(stdout)
 		var currentProgress Progress
 		progressUpdateCount := 0
@@ -576,6 +580,9 @@ func (t *Transcoder) Transcode(
 							// Calculate ETA based on speed
 							if currentProgress.Speed > 0 {
 								remaining := duration - currentProgress.Time
+								if remaining < 0 {
+									remaining = 0
+								}
 								currentProgress.ETA = time.Duration(float64(remaining) / currentProgress.Speed)
 							}
 						} else {
@@ -603,6 +610,7 @@ func (t *Transcoder) Transcode(
 
 	// Parse stderr stats output as a fallback (some ffmpeg builds don't emit -progress)
 	go func() {
+		defer progressWG.Done()
 		scanner := bufio.NewScanner(stderr)
 		scanner.Split(scanCRLF)
 		var lastStatsTime time.Duration
@@ -630,6 +638,9 @@ func (t *Transcoder) Transcode(
 				}
 				if progress.Speed > 0 {
 					remaining := duration - progress.Time
+					if remaining < 0 {
+						remaining = 0
+					}
 					progress.ETA = time.Duration(float64(remaining) / progress.Speed)
 				}
 			}
@@ -645,6 +656,12 @@ func (t *Transcoder) Transcode(
 		if err := scanner.Err(); err != nil {
 			log.Printf("[transcode] Stderr scanner error: %v", err)
 		}
+	}()
+
+	// Close progressCh after both goroutines finish to prevent send-on-closed-channel
+	go func() {
+		progressWG.Wait()
+		close(progressCh)
 	}()
 
 	// Wait for ffmpeg to complete
