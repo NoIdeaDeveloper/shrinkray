@@ -600,14 +600,32 @@ func (q *Queue) AddSoftwareFallback(originalJob *Job, fallbackReason string) *Jo
 	return job
 }
 
-// Get returns a job by ID
+// copyJob returns a deep copy of a Job, copying slice fields to prevent
+// data races when the caller reads fields without holding the queue lock.
+func copyJob(j *Job) *Job {
+	if j == nil {
+		return nil
+	}
+	c := *j
+	if j.SubtitleCodecs != nil {
+		c.SubtitleCodecs = make([]string, len(j.SubtitleCodecs))
+		copy(c.SubtitleCodecs, j.SubtitleCodecs)
+	}
+	if j.FFmpegArgs != nil {
+		c.FFmpegArgs = make([]string, len(j.FFmpegArgs))
+		copy(c.FFmpegArgs, j.FFmpegArgs)
+	}
+	return &c
+}
+
+// Get returns a copy of a job by ID
 func (q *Queue) Get(id string) *Job {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
-	return q.jobs[id]
+	return copyJob(q.jobs[id])
 }
 
-// GetAll returns all jobs in order
+// GetAll returns copies of all jobs in order
 func (q *Queue) GetAll() []*Job {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
@@ -615,13 +633,13 @@ func (q *Queue) GetAll() []*Job {
 	jobs := make([]*Job, 0, len(q.order))
 	for _, id := range q.order {
 		if job, ok := q.jobs[id]; ok {
-			jobs = append(jobs, job)
+			jobs = append(jobs, copyJob(job))
 		}
 	}
 	return jobs
 }
 
-// GetNext returns the next workable job (pending_probe or pending) for workers to pick up.
+// GetNext returns a copy of the next workable job (pending_probe or pending) for workers to pick up.
 // Jobs with pending_probe status need to be probed first by the worker.
 func (q *Queue) GetNext() *Job {
 	q.mu.Lock()
@@ -629,7 +647,7 @@ func (q *Queue) GetNext() *Job {
 
 	for _, id := range q.order {
 		if job, ok := q.jobs[id]; ok && job.IsWorkable() {
-			return job
+			return copyJob(job)
 		}
 	}
 	return nil
@@ -1262,8 +1280,21 @@ func (q *Queue) Unsubscribe(ch chan JobEvent) {
 	q.subsMu.Unlock()
 }
 
-// broadcast sends an event to all subscribers
+// broadcast sends an event to all subscribers.
+// Job and Jobs fields are deep-copied so subscribers receive snapshots
+// that won't be mutated by concurrent queue operations.
 func (q *Queue) broadcast(event JobEvent) {
+	if event.Job != nil {
+		event.Job = copyJob(event.Job)
+	}
+	if event.Jobs != nil {
+		copied := make([]*Job, len(event.Jobs))
+		for i, j := range event.Jobs {
+			copied[i] = copyJob(j)
+		}
+		event.Jobs = copied
+	}
+
 	q.subsMu.RLock()
 	defer q.subsMu.RUnlock()
 
