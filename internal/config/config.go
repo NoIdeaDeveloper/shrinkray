@@ -289,11 +289,16 @@ func applyFeatureFlagEnvOverrides(cfg *Config) {
 // Accepts: "1", "true", "yes", "on" for true; anything else is false
 func envBool(v string) bool {
 	b, err := strconv.ParseBool(v)
-	if err != nil {
-		// Also accept "1" as true
-		return v == "1"
+	if err == nil {
+		return b
 	}
-	return b
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "yes", "on":
+		return true
+	case "no", "off":
+		return false
+	}
+	return v == "1"
 }
 
 // Save writes the config to a YAML file

@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"syscall"
@@ -222,5 +223,11 @@ func main() {
 func checkFFmpeg(cfg *config.Config) error {
 	fmt.Printf("  FFmpeg:       %s\n", cfg.FFmpegPath)
 	fmt.Printf("  FFprobe:      %s\n", cfg.FFprobePath)
+	if _, err := exec.LookPath(cfg.FFmpegPath); err != nil {
+		return fmt.Errorf("ffmpeg not found at %s: %w", cfg.FFmpegPath, err)
+	}
+	if _, err := exec.LookPath(cfg.FFprobePath); err != nil {
+		return fmt.Errorf("ffprobe not found at %s: %w", cfg.FFprobePath, err)
+	}
 	return nil
 }

@@ -770,13 +770,15 @@ func FinalizeTranscode(inputPath, tempPath string, replace bool) (finalPath stri
 			return "", fmt.Errorf("failed to remove original file: %w", err)
 		}
 
-		_ = os.Chtimes(finalPath, originalModTime, originalModTime)
+	_ = os.Chtimes(finalPath, originalModTime, originalModTime)
 
-		os.Remove(tempPath)
-		return finalPath, nil
+	if err := os.Remove(tempPath); err != nil {
+		log.Printf("[transcode] Warning: failed to remove temp file %s: %v", tempPath, err)
 	}
+	return finalPath, nil
+}
 
-	oldPath := inputPath + ".old"
+oldPath := inputPath + ".old"
 	if err := os.Rename(inputPath, oldPath); err != nil {
 		return "", fmt.Errorf("failed to rename original to .old: %w", err)
 	}
@@ -790,6 +792,8 @@ func FinalizeTranscode(inputPath, tempPath string, replace bool) (finalPath stri
 
 	_ = os.Chtimes(finalPath, originalModTime, originalModTime)
 
-	os.Remove(tempPath)
+	if err := os.Remove(tempPath); err != nil {
+		log.Printf("[transcode] Warning: failed to remove temp file %s: %v", tempPath, err)
+	}
 	return finalPath, nil
 }

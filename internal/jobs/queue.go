@@ -1079,6 +1079,10 @@ func (q *Queue) CancelJob(id string) error {
 
 	job.Status = StatusCancelled
 	job.CompletedAt = time.Now()
+	job.TempPath = ""
+	job.Progress = 0
+	job.Speed = 0
+	job.ETA = ""
 
 	if err := q.save(); err != nil {
 		log.Printf("[queue] Warning: failed to persist queue: %v", err)
