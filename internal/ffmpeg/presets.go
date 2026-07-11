@@ -366,17 +366,26 @@ func BuildPresetArgs(preset *Preset, sourceBitrate int64, subtitleCodecs []strin
 			}
 		}
 	} else if preset.MaxHeight > 0 {
-		// Non-VAAPI paths: QSV, NVENC, Software, VideoToolbox - unchanged
+		// Non-VAAPI paths: QSV, NVENC, Software, VideoToolbox
 		// Use -filter:v:0 to apply filter only to the first video output stream
 		scaleFilter := config.scaleFilter
 		if scaleFilter == "" {
 			scaleFilter = "scale"
 		}
-		outputArgs = append(outputArgs,
-			"-filter:v:0", fmt.Sprintf("%s=-2:'min(ih,%d)'", scaleFilter, preset.MaxHeight),
-		)
+		if bitDepth >= 10 {
+			// Preserve 10-bit pixel format for HDR content
+			scaleFilter = fmt.Sprintf("%s=-2:'min(ih,%d)':flags=neighbor", scaleFilter, preset.MaxHeight)
+			outputArgs = append(outputArgs,
+				"-filter:v:0", fmt.Sprintf("format=p010le,%s", scaleFilter),
+			)
+		} else {
+			outputArgs = append(outputArgs,
+				"-filter:v:0", fmt.Sprintf("%s=-2:'min(ih,%d)'", scaleFilter, preset.MaxHeight),
+			)
+		}
 	}
 	// No filter for non-VAAPI paths without scaling (correct)
+	// Color metadata is set below via output flags for all non-VAAPI encoders
 
 	qualityStr := config.quality
 	if preset.Codec == CodecHEVC && qualityHEVC > 0 {
@@ -424,6 +433,17 @@ func BuildPresetArgs(preset *Preset, sourceBitrate int64, subtitleCodecs []strin
 	// These must come before -c:v:1 to be associated with stream v:0
 	outputArgs = append(outputArgs, config.qualityFlag, qualityStr)
 	outputArgs = append(outputArgs, config.extraArgs...)
+
+	// Add output color metadata for non-VAAPI encoders with 10-bit/HDR content.
+	// VAAPI encoders get color handling via scale_vaapi filter params.
+	// Without these flags, the encoder output may be mislabeled or lose HDR metadata.
+	if preset.Encoder != HWAccelVAAPI && bitDepth >= 10 {
+		outputArgs = append(outputArgs,
+			"-color_primaries", "bt2020",
+			"-color_trc", "smpte2084",
+			"-colorspace", "bt2020nc",
+		)
+	}
 
 	// Now add the copy codec for cover art (second video stream if present)
 	outputArgs = append(outputArgs, "-c:v:1", "copy")
