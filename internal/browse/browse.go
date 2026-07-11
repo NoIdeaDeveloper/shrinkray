@@ -97,8 +97,8 @@ func (b *Browser) Browse(ctx context.Context, path string) (*BrowseResult, error
 	}
 	mediaRoot := b.MediaRoot()
 
-	// Ensure path is within media root
-	if !strings.HasPrefix(cleanPath, mediaRoot) {
+	// Ensure path is within media root (separator-aware boundary check)
+	if cleanPath != mediaRoot && !strings.HasPrefix(cleanPath, mediaRoot+string(filepath.Separator)) {
 		cleanPath = mediaRoot
 	}
 
@@ -373,8 +373,8 @@ func (b *Browser) DiscoverVideoFiles(ctx context.Context, paths []string, opts G
 			cleanPath = filepath.Clean(path)
 		}
 
-		// Ensure path is within media root
-		if !strings.HasPrefix(cleanPath, mediaRoot) {
+		// Ensure path is within media root (separator-aware boundary check)
+		if cleanPath != mediaRoot && !strings.HasPrefix(cleanPath, mediaRoot+string(filepath.Separator)) {
 			log.Printf("[browse] Path %s is outside media root %s, skipping", cleanPath, mediaRoot)
 			continue
 		}

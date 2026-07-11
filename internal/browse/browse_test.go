@@ -130,6 +130,19 @@ func TestBrowserSecurity(t *testing.T) {
 	if result.Path != tmpDir {
 		t.Errorf("expected path to be %s after traversal attempt, got %s", tmpDir, result.Path)
 	}
+
+	// Try sibling directory with media root as prefix (boundary check)
+	// e.g. if tmpDir is /tmp/abc, try /tmp/abcdef which has tmpDir as a prefix
+	sibling := tmpDir + "x"
+	result, err = browser.Browse(ctx, sibling)
+	if err != nil {
+		t.Fatalf("Browse failed: %v", err)
+	}
+
+	// Should redirect to media root, not allow browsing the sibling
+	if result.Path != tmpDir {
+		t.Errorf("expected sibling path to be redirected to %s, got %s", tmpDir, result.Path)
+	}
 }
 
 func TestGetVideoFiles(t *testing.T) {
