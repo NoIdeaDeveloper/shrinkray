@@ -678,6 +678,7 @@ func (h *Handler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		// Dynamically resize the worker pool
 		h.workerPool.Resize(workers)
+		h.cfg.Workers = workers
 	}
 
 	// Handle Pushover settings
