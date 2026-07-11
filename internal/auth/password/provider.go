@@ -25,11 +25,12 @@ const (
 
 // Provider implements password-based authentication.
 type Provider struct {
-	users      map[string]string
-	hashAlgo   string
-	secret     []byte
-	cookieName string
-	sessionTTL time.Duration
+	users        map[string]string
+	hashAlgo     string
+	secret       []byte
+	cookieName   string
+	sessionTTL   time.Duration
+	secureCookie *bool // nil = auto-detect from r.TLS
 }
 
 // NewProvider creates a new password auth provider.
@@ -56,6 +57,13 @@ func NewProvider(users map[string]string, hashAlgo, secret string) (*Provider, e
 		cookieName: defaultCookieName,
 		sessionTTL: defaultSessionTTL,
 	}, nil
+}
+
+// SetSecureCookie overrides the automatic Secure flag detection.
+// Pass true to always set Secure=true, false to always set Secure=false,
+// or leave unset to auto-detect from r.TLS (secure only when directly serving HTTPS).
+func (p *Provider) SetSecureCookie(secure bool) {
+	p.secureCookie = &secure
 }
 
 // Authenticate verifies the session cookie.
@@ -311,7 +319,7 @@ func (p *Provider) HandleLogin(w http.ResponseWriter, r *http.Request) error {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Expires:  expires,
-		Secure:   isSecureRequest(r),
+		Secure:   p.isSecureRequest(r),
 	})
 
 	if strings.Contains(r.Header.Get("Accept"), "text/html") {
@@ -338,16 +346,13 @@ func (p *Provider) ClearSession(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   isSecureRequest(r),
+		Secure:   p.isSecureRequest(r),
 	})
 }
 
-func isSecureRequest(r *http.Request) bool {
-	if forwarded := r.Header.Get("X-Forwarded-Proto"); forwarded != "" {
-		parts := strings.Split(forwarded, ",")
-		if len(parts) > 0 && strings.TrimSpace(parts[0]) != "" {
-			return strings.EqualFold(strings.TrimSpace(parts[0]), "https")
-		}
+func (p *Provider) isSecureRequest(r *http.Request) bool {
+	if p.secureCookie != nil {
+		return *p.secureCookie
 	}
 	return r.TLS != nil
 }
