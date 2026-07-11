@@ -32,6 +32,9 @@ type Queue struct {
 	saveMu    sync.Mutex
 	saveTimer *time.Timer
 	saveDirty bool
+
+	// writeMu serializes disk writes to prevent concurrent temp file corruption
+	writeMu sync.Mutex
 }
 
 // NewQueue creates a new job queue, optionally loading from a persistence file
@@ -153,8 +156,11 @@ func (q *Queue) save() error {
 	return q.writeToFile(pd)
 }
 
-// writeToFile performs the actual disk write
+// writeToFile performs the actual disk write (serialized to prevent concurrent temp file corruption)
 func (q *Queue) writeToFile(pd persistenceData) error {
+	q.writeMu.Lock()
+	defer q.writeMu.Unlock()
+
 	// Ensure directory exists
 	dir := filepath.Dir(q.filePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
