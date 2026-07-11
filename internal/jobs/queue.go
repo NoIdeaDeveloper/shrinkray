@@ -760,26 +760,39 @@ func (q *Queue) CompleteJob(id string, outputPath string, outputSize int64) erro
 
 // ProcessedPaths returns a copy of processed input paths.
 func (q *Queue) ProcessedPaths() map[string]struct{} {
+	// Collect paths under lock
 	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	paths := make(map[string]struct{}, len(q.processedPaths))
-	removed := 0
+	allPaths := make([]string, 0, len(q.processedPaths))
 	for path := range q.processedPaths {
+		allPaths = append(allPaths, path)
+	}
+	q.mu.Unlock()
+
+	// Check filesystem outside lock to avoid blocking queue operations
+	paths := make(map[string]struct{}, len(allPaths))
+	var stalePaths []string
+	for _, path := range allPaths {
 		if _, err := os.Stat(path); err != nil {
 			if os.IsNotExist(err) {
-				delete(q.processedPaths, path)
-				removed++
+				stalePaths = append(stalePaths, path)
 			}
 			continue
 		}
 		paths[path] = struct{}{}
 	}
-	if removed > 0 {
+
+	// Re-acquire lock to remove stale paths
+	if len(stalePaths) > 0 {
+		q.mu.Lock()
+		for _, path := range stalePaths {
+			delete(q.processedPaths, path)
+		}
 		if err := q.save(); err != nil {
 			log.Printf("[queue] Warning: failed to persist queue: %v", err)
 		}
+		q.mu.Unlock()
 	}
+
 	return paths
 }
 
