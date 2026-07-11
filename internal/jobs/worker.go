@@ -345,7 +345,11 @@ func (w *Worker) processJob(job *Job) {
 
 		probe, err := w.prober.Probe(jobCtx, job.InputPath)
 		if err != nil {
-			w.queue.FailJob(job.ID, fmt.Sprintf("probe failed: %v", err))
+			if jobCtx.Err() != nil {
+				w.queue.CancelJob(job.ID)
+			} else {
+				w.queue.FailJob(job.ID, fmt.Sprintf("probe failed: %v", err))
+			}
 			return
 		}
 
@@ -467,6 +471,13 @@ func (w *Worker) processJob(job *Job) {
 		} else {
 			w.queue.FailJob(job.ID, err.Error())
 		}
+		return
+	}
+
+	// Check if the job was cancelled during transcode
+	if jobCtx.Err() != nil {
+		os.Remove(tempPath)
+		w.queue.CancelJob(job.ID)
 		return
 	}
 
