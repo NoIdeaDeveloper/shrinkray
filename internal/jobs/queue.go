@@ -705,6 +705,10 @@ func (q *Queue) CompleteJob(id string, outputPath string, outputSize int64) erro
 		return fmt.Errorf("job not found: %s", id)
 	}
 
+	if job.IsTerminal() && job.Status != StatusComplete {
+		return fmt.Errorf("job already in terminal state: %s", job.Status)
+	}
+
 	wasComplete := job.Status == StatusComplete
 	previousSaved := job.SpaceSaved
 
@@ -873,6 +877,10 @@ func (q *Queue) FailJobWithDetails(id string, errMsg string, details *FailJobDet
 		return fmt.Errorf("job not found: %s", id)
 	}
 
+	if job.IsTerminal() && job.Status != StatusFailed {
+		return fmt.Errorf("job already in terminal state: %s", job.Status)
+	}
+
 	job.Status = StatusFailed
 	job.Error = errMsg
 	job.CompletedAt = time.Now()
@@ -907,6 +915,10 @@ func (q *Queue) SkipJob(id string, reason string) error {
 		return fmt.Errorf("job not found: %s", id)
 	}
 
+	if job.IsTerminal() && job.Status != StatusSkipped {
+		return fmt.Errorf("job already in terminal state: %s", job.Status)
+	}
+
 	job.Status = StatusSkipped
 	job.Error = reason
 	job.CompletedAt = time.Now()
@@ -929,6 +941,10 @@ func (q *Queue) NoGainJob(id string, reason string) error {
 	job, ok := q.jobs[id]
 	if !ok {
 		return fmt.Errorf("job not found: %s", id)
+	}
+
+	if job.IsTerminal() && job.Status != StatusNoGain {
+		return fmt.Errorf("job already in terminal state: %s", job.Status)
 	}
 
 	job.Status = StatusNoGain
