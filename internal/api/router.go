@@ -8,6 +8,16 @@ import (
 	"github.com/gwlsn/shrinkray/internal/auth"
 )
 
+const maxBodyBytes = 10 << 20 // 10 MB
+
+// limitBody wraps a handler to reject request bodies exceeding maxBodyBytes.
+func limitBody(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+		handler.ServeHTTP(w, r)
+	})
+}
+
 // NewRouter creates a new HTTP router with all API endpoints
 // debugMode determines which UI to serve (true = debug UI, false = production UI)
 func NewRouter(h *Handler, staticFS embed.FS, debugMode bool, authMiddleware *auth.Middleware) *http.ServeMux {
@@ -19,6 +29,7 @@ func NewRouter(h *Handler, staticFS embed.FS, debugMode bool, authMiddleware *au
 	}
 
 	wrap := func(handler http.Handler) http.Handler {
+		handler = limitBody(handler)
 		if authMiddleware == nil {
 			return handler
 		}
@@ -132,6 +143,7 @@ func NewRouterWithoutStatic(h *Handler, authMiddleware *auth.Middleware) *http.S
 	}
 
 	wrap := func(handler http.Handler) http.Handler {
+		handler = limitBody(handler)
 		if authMiddleware == nil {
 			return handler
 		}
