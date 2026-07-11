@@ -199,8 +199,9 @@ func (p *WorkerPool) Resize(n int) {
 
 		// First, collect all running jobs and their workers
 		type runningJob struct {
-			worker *Worker
-			jobID  string
+			worker    *Worker
+			jobID     string
+			createdAt time.Time
 		}
 		var runningJobs []runningJob
 
@@ -208,17 +209,17 @@ func (p *WorkerPool) Resize(n int) {
 			w.currentJobMu.Lock()
 			if w.currentJob != nil {
 				runningJobs = append(runningJobs, runningJob{
-					worker: w,
-					jobID:  w.currentJob.ID,
+					worker:    w,
+					jobID:     w.currentJob.ID,
+					createdAt: w.currentJob.CreatedAt,
 				})
 			}
 			w.currentJobMu.Unlock()
 		}
 
-		// Sort running jobs by job ID descending (newest first)
-		// Job IDs are timestamp-based, so lexicographically larger = more recent
+		// Sort running jobs by creation time descending (newest first)
 		sort.Slice(runningJobs, func(i, j int) bool {
-			return runningJobs[i].jobID > runningJobs[j].jobID
+			return runningJobs[i].createdAt.After(runningJobs[j].createdAt)
 		})
 
 		// Cancel jobs starting from most recent
