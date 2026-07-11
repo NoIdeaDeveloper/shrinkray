@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	shrinkray "github.com/gwlsn/shrinkray"
@@ -17,8 +16,6 @@ import (
 	"github.com/gwlsn/shrinkray/internal/config"
 	"github.com/gwlsn/shrinkray/internal/ffmpeg"
 	"github.com/gwlsn/shrinkray/internal/jobs"
-	"github.com/gwlsn/shrinkray/internal/ntfy"
-	"github.com/gwlsn/shrinkray/internal/pushover"
 )
 
 // Handler provides HTTP API handlers
@@ -28,9 +25,6 @@ type Handler struct {
 	workerPool *jobs.WorkerPool
 	cfg        *config.Config
 	cfgPath    string
-	pushover   *pushover.Client
-	ntfy       *ntfy.Client
-	notifyMu   sync.Mutex // Protects notification sending to prevent duplicates
 }
 
 // NewHandler creates a new API handler
@@ -42,8 +36,6 @@ func NewHandler(browser *browse.Browser, queue *jobs.Queue, workerPool *jobs.Wor
 		workerPool: workerPool,
 		cfg:        cfg,
 		cfgPath:    cfgPath,
-		pushover:   pushover.NewClient(cfg.PushoverUserKey, cfg.PushoverAppToken),
-		ntfy:       ntfy.NewClient(cfg.NtfyServer, cfg.NtfyTopic, cfg.NtfyToken),
 	}
 }
 
@@ -618,14 +610,6 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 		"subtitle_handling":       h.cfg.SubtitleHandling,
 		"workers":                 h.cfg.Workers,
 		"has_temp_path":           h.cfg.TempPath != "",
-		"pushover_user_key":       h.cfg.PushoverUserKey,
-		"pushover_app_token":      h.cfg.PushoverAppToken,
-		"pushover_configured":     h.pushover.IsConfigured(),
-		"ntfy_server":             h.cfg.NtfyServer,
-		"ntfy_topic":              h.cfg.NtfyTopic,
-		"ntfy_token":              h.cfg.NtfyToken,
-		"ntfy_configured":         h.ntfy.IsConfigured(),
-		"notify_on_complete":      h.cfg.NotifyOnComplete,
 		"hide_processing_tmp":     h.cfg.HideProcessingTmp,
 		"allow_software_fallback": h.cfg.AllowSoftwareFallback,
 		"quality_hevc":            h.cfg.QualityHEVC,
@@ -652,12 +636,6 @@ type UpdateConfigRequest struct {
 	OriginalHandling      *string `json:"original_handling,omitempty"`
 	SubtitleHandling      *string `json:"subtitle_handling,omitempty"`
 	Workers               *int    `json:"workers,omitempty"`
-	PushoverUserKey       *string `json:"pushover_user_key,omitempty"`
-	PushoverAppToken      *string `json:"pushover_app_token,omitempty"`
-	NtfyServer            *string `json:"ntfy_server,omitempty"`
-	NtfyTopic             *string `json:"ntfy_topic,omitempty"`
-	NtfyToken             *string `json:"ntfy_token,omitempty"`
-	NotifyOnComplete      *bool   `json:"notify_on_complete,omitempty"`
 	HideProcessingTmp     *bool   `json:"hide_processing_tmp,omitempty"`
 	AllowSoftwareFallback *bool   `json:"allow_software_fallback,omitempty"`
 	QualityHEVC           *int    `json:"quality_hevc,omitempty"`
@@ -703,29 +681,6 @@ func (h *Handler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Handle Pushover settings
-	if req.PushoverUserKey != nil {
-		h.cfg.PushoverUserKey = *req.PushoverUserKey
-		h.pushover.UserKey = *req.PushoverUserKey
-	}
-	if req.PushoverAppToken != nil {
-		h.cfg.PushoverAppToken = *req.PushoverAppToken
-		h.pushover.AppToken = *req.PushoverAppToken
-	}
-	if req.NtfyServer != nil {
-		h.cfg.NtfyServer = *req.NtfyServer
-		h.ntfy.ServerURL = *req.NtfyServer
-	}
-	if req.NtfyTopic != nil {
-		h.cfg.NtfyTopic = *req.NtfyTopic
-		h.ntfy.Topic = *req.NtfyTopic
-	}
-	if req.NtfyToken != nil {
-		h.cfg.NtfyToken = *req.NtfyToken
-		h.ntfy.Token = *req.NtfyToken
-	}
-	if req.NotifyOnComplete != nil {
-		h.cfg.NotifyOnComplete = *req.NotifyOnComplete
-	}
 	if req.HideProcessingTmp != nil {
 		h.cfg.HideProcessingTmp = *req.HideProcessingTmp
 		h.browser.SetHideProcessingTmp(*req.HideProcessingTmp)
@@ -788,41 +743,6 @@ func (h *Handler) ClearCache(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cache cleared"})
 }
 
-// TestPushover handles POST /api/pushover/test
-func (h *Handler) TestPushover(w http.ResponseWriter, r *http.Request) {
-	if !h.pushover.IsConfigured() {
-		writeError(w, http.StatusBadRequest, "Pushover credentials not configured")
-		return
-	}
-
-	if err := h.pushover.Test(); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]string{"status": "Test notification sent"})
-}
-
-// TestNtfy handles POST /api/ntfy/test
-func (h *Handler) TestNtfy(w http.ResponseWriter, r *http.Request) {
-	if !h.ntfy.IsConfigured() {
-		writeError(w, http.StatusBadRequest, "ntfy credentials not configured")
-		return
-	}
-
-	if err := h.ntfy.Test(); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]string{"status": "Test notification sent"})
-}
-
-// GetPushover returns the Pushover client (for SSE handler)
-func (h *Handler) GetPushover() *pushover.Client {
-	return h.pushover
-}
-
 // ApplyConfig updates runtime configuration from a freshly loaded config.
 func (h *Handler) ApplyConfig(newCfg *config.Config) {
 	if newCfg.Workers != h.cfg.Workers {
@@ -844,21 +764,9 @@ func (h *Handler) ApplyConfig(newCfg *config.Config) {
 	h.cfg.Workers = newCfg.Workers
 	h.cfg.FFmpegPath = newCfg.FFmpegPath
 	h.cfg.FFprobePath = newCfg.FFprobePath
-	h.cfg.PushoverUserKey = newCfg.PushoverUserKey
-	h.cfg.PushoverAppToken = newCfg.PushoverAppToken
-	h.cfg.NtfyServer = newCfg.NtfyServer
-	h.cfg.NtfyTopic = newCfg.NtfyTopic
-	h.cfg.NtfyToken = newCfg.NtfyToken
-	h.cfg.NotifyOnComplete = newCfg.NotifyOnComplete
 	h.cfg.HideProcessingTmp = newCfg.HideProcessingTmp
 	h.cfg.AllowSoftwareFallback = newCfg.AllowSoftwareFallback
 	h.cfg.Features = newCfg.Features
-
-	h.pushover.UserKey = newCfg.PushoverUserKey
-	h.pushover.AppToken = newCfg.PushoverAppToken
-	h.ntfy.ServerURL = newCfg.NtfyServer
-	h.ntfy.Topic = newCfg.NtfyTopic
-	h.ntfy.Token = newCfg.NtfyToken
 }
 
 // RetryJob handles POST /api/jobs/:id/retry

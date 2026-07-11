@@ -177,23 +177,6 @@ test.describe('Accessibility', () => {
       await expect(closeButton).toHaveAttribute('aria-label', 'Close settings');
     });
 
-    test('text inputs have aria-labels', async ({ page }) => {
-      const pushoverUser = page.locator('#setting-pushover-user');
-      await expect(pushoverUser).toHaveAttribute('aria-label', 'Pushover User Key');
-      
-      const pushoverToken = page.locator('#setting-pushover-token');
-      await expect(pushoverToken).toHaveAttribute('aria-label', 'Pushover App Token');
-      
-      const ntfyServer = page.locator('#setting-ntfy-server');
-      await expect(ntfyServer).toHaveAttribute('aria-label', 'ntfy Server URL');
-      
-      const ntfyTopic = page.locator('#setting-ntfy-topic');
-      await expect(ntfyTopic).toHaveAttribute('aria-label', 'ntfy Topic');
-      
-      const ntfyToken = page.locator('#setting-ntfy-token');
-      await expect(ntfyToken).toHaveAttribute('aria-label', 'ntfy Access Token');
-    });
-
     test('checkboxes have accessible labels', async ({ page }) => {
       const hideProcessingCheckbox = page.locator('#setting-hide-processing-tmp');
       await expect(hideProcessingCheckbox).toHaveAttribute('aria-label');

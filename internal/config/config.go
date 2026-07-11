@@ -72,24 +72,6 @@ type Config struct {
 	// QueueFile is where the job queue is persisted (default: config dir + queue.json)
 	QueueFile string `yaml:"queue_file"`
 
-	// PushoverUserKey is the Pushover user key for notifications
-	PushoverUserKey string `yaml:"pushover_user_key"`
-
-	// PushoverAppToken is the Pushover application token for notifications
-	PushoverAppToken string `yaml:"pushover_app_token"`
-
-	// NtfyServer is the ntfy server URL for notifications
-	NtfyServer string `yaml:"ntfy_server"`
-
-	// NtfyTopic is the ntfy topic for notifications
-	NtfyTopic string `yaml:"ntfy_topic"`
-
-	// NtfyToken is the ntfy access token (optional)
-	NtfyToken string `yaml:"ntfy_token"`
-
-	// NotifyOnComplete triggers a notification when all jobs finish
-	NotifyOnComplete bool `yaml:"notify_on_complete"`
-
 	// HideProcessingTmp controls hiding shrinkray.tmp files from the UI
 	HideProcessingTmp bool `yaml:"hide_processing_tmp"`
 
@@ -145,8 +127,6 @@ type AuthConfig struct {
 	BypassPaths []string `yaml:"bypass_paths"`
 	// Password configures password-based auth.
 	Password PasswordAuthConfig `yaml:"password"`
-	// OIDC configures OpenID Connect auth.
-	OIDC OIDCAuthConfig `yaml:"oidc"`
 }
 
 // PasswordAuthConfig configures password auth.
@@ -155,24 +135,6 @@ type PasswordAuthConfig struct {
 	Users map[string]string `yaml:"users"`
 	// HashAlgo specifies the expected password hash algorithm.
 	HashAlgo string `yaml:"hash_algo"`
-}
-
-// OIDCAuthConfig configures OpenID Connect auth.
-type OIDCAuthConfig struct {
-	// Issuer is the OIDC issuer URL.
-	Issuer string `yaml:"issuer"`
-	// ClientID is the OIDC client ID.
-	ClientID string `yaml:"client_id"`
-	// ClientSecret is the OIDC client secret.
-	ClientSecret string `yaml:"client_secret"`
-	// RedirectURL is the callback URL registered with the IdP.
-	RedirectURL string `yaml:"redirect_url"`
-	// Scopes are extra OAuth scopes (openid is always enforced).
-	Scopes []string `yaml:"scopes"`
-	// GroupClaim is the claim name that holds group membership.
-	GroupClaim string `yaml:"group_claim"`
-	// AllowedGroups restricts access to matching group values.
-	AllowedGroups []string `yaml:"allowed_groups"`
 }
 
 // DefaultConfig returns a config with sensible defaults
@@ -186,7 +148,6 @@ func DefaultConfig() *Config {
 		FFmpegPath:        "ffmpeg",
 		FFprobePath:       "ffprobe",
 		QueueFile:         "",
-		NtfyServer:        "https://ntfy.sh",
 		QualityHEVC:       0,
 		QualityAV1:        0,
 		ScheduleEnabled:   false,
@@ -200,9 +161,6 @@ func DefaultConfig() *Config {
 			Enabled:  false,
 			Provider: "noop",
 			Password: PasswordAuthConfig{HashAlgo: "auto"},
-			OIDC: OIDCAuthConfig{
-				Scopes: []string{"openid", "profile", "email"},
-			},
 		},
 	}
 }
@@ -274,27 +232,6 @@ func applyAuthEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("SHRINKRAY_AUTH_USERS"); v != "" {
 		cfg.Auth.Password.Users = parseUsersEnv(v)
-	}
-	if v := os.Getenv("SHRINKRAY_AUTH_OIDC_ISSUER"); v != "" {
-		cfg.Auth.OIDC.Issuer = v
-	}
-	if v := os.Getenv("SHRINKRAY_AUTH_OIDC_CLIENT_ID"); v != "" {
-		cfg.Auth.OIDC.ClientID = v
-	}
-	if v := os.Getenv("SHRINKRAY_AUTH_OIDC_CLIENT_SECRET"); v != "" {
-		cfg.Auth.OIDC.ClientSecret = v
-	}
-	if v := os.Getenv("SHRINKRAY_AUTH_OIDC_REDIRECT_URL"); v != "" {
-		cfg.Auth.OIDC.RedirectURL = v
-	}
-	if v := os.Getenv("SHRINKRAY_AUTH_OIDC_SCOPES"); v != "" {
-		cfg.Auth.OIDC.Scopes = splitCommaList(v)
-	}
-	if v := os.Getenv("SHRINKRAY_AUTH_OIDC_GROUP_CLAIM"); v != "" {
-		cfg.Auth.OIDC.GroupClaim = v
-	}
-	if v := os.Getenv("SHRINKRAY_AUTH_OIDC_ALLOWED_GROUPS"); v != "" {
-		cfg.Auth.OIDC.AllowedGroups = splitCommaList(v)
 	}
 }
 

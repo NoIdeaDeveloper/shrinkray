@@ -64,8 +64,6 @@ func NewRouter(h *Handler, staticFS embed.FS, debugMode bool, authMiddleware *au
 
 	mux.Handle("GET /api/stats", wrap(http.HandlerFunc(h.Stats)))
 	mux.Handle("POST /api/cache/clear", wrap(http.HandlerFunc(h.ClearCache)))
-	mux.Handle("POST /api/pushover/test", wrap(http.HandlerFunc(h.TestPushover)))
-	mux.Handle("POST /api/ntfy/test", wrap(http.HandlerFunc(h.TestNtfy)))
 
 	// Determine which UI to serve
 	uiPath := "web/templates"
@@ -179,8 +177,6 @@ func NewRouterWithoutStatic(h *Handler, authMiddleware *auth.Middleware) *http.S
 
 	mux.Handle("GET /api/stats", wrap(http.HandlerFunc(h.Stats)))
 	mux.Handle("POST /api/cache/clear", wrap(http.HandlerFunc(h.ClearCache)))
-	mux.Handle("POST /api/pushover/test", wrap(http.HandlerFunc(h.TestPushover)))
-	mux.Handle("POST /api/ntfy/test", wrap(http.HandlerFunc(h.TestNtfy)))
 
 	return mux
 }

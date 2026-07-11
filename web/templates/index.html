@@ -4,10 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shrinkray</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.bunny.net">
     <link rel="icon" type="image/png" href="/favicon.png">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.bunny.net/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg-primary: #FAFAFA;
@@ -1369,21 +1368,6 @@
             display: flex;
             gap: 8px;
             flex-shrink: 0;
-        }
-
-        .notify-label {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 0.8125rem;
-            color: var(--text-secondary);
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .notify-label input {
-            accent-color: var(--accent);
-            cursor: pointer;
         }
 
         /* Settings Menu */
@@ -2772,10 +2756,6 @@
                                 Queue <span class="queue-count-badge" id="queue-count-badge" style="display: none;"></span>
                             </span>
                             <span class="panel-toggle-actions">
-                                <label class="notify-label" id="notify-container" style="display: none" onclick="event.stopPropagation()">
-                                    <input type="checkbox" id="notify-checkbox" onchange="updateNotifySetting(this.checked)" onclick="event.stopPropagation()">
-                                    <span>Notify when done</span>
-                                </label>
                                 <svg class="panel-collapse-toggle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <polyline points="6 9 12 15 18 9"></polyline>
                                 </svg>
@@ -2977,85 +2957,6 @@
                     </div>
                 </div>
 
-                <div class="setting-group collapsed" id="notification-settings">
-                    <div class="setting-group-header" onclick="toggleSettingGroup('notification-settings')" role="button" tabindex="0" aria-expanded="false" aria-controls="notification-settings-content" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSettingGroup('notification-settings')}">
-                        <div class="setting-group-title">Notifications</div>
-                        <svg class="setting-group-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <polyline points="6 9 12 15 18 9"/>
-                        </svg>
-                    </div>
-                    <div class="setting-group-content" id="notification-settings-content">
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-name">Pushover User Key</div>
-                                <div class="setting-desc">Your Pushover user/group key</div>
-                            </div>
-                            <div class="setting-control">
-                                <input type="text" class="setting-input" id="setting-pushover-user"
-                                       placeholder="Enter user key" aria-label="Pushover User Key" onchange="updateSetting('pushover_user_key', this.value)">
-                            </div>
-                        </div>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-name">Pushover App Token</div>
-                                <div class="setting-desc">Your application token</div>
-                            </div>
-                            <div class="setting-control">
-                                <input type="text" class="setting-input" id="setting-pushover-token"
-                                       placeholder="Enter app token" aria-label="Pushover App Token" onchange="updateSetting('pushover_app_token', this.value)">
-                            </div>
-                        </div>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-name">Test Pushover</div>
-                                <div class="setting-desc">Send a test notification</div>
-                            </div>
-                            <div class="setting-control">
-                                <button class="btn btn-secondary btn-sm" id="test-pushover-btn" onclick="testPushover()">Test</button>
-                            </div>
-                        </div>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-name">ntfy Server</div>
-                                <div class="setting-desc">Server URL</div>
-                            </div>
-                            <div class="setting-control">
-                                <input type="text" class="setting-input" id="setting-ntfy-server"
-                                       placeholder="https://ntfy.sh" aria-label="ntfy Server URL" onchange="updateSetting('ntfy_server', this.value)">
-                            </div>
-                        </div>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-name">ntfy Topic</div>
-                                <div class="setting-desc">Topic name</div>
-                            </div>
-                            <div class="setting-control">
-                                <input type="text" class="setting-input" id="setting-ntfy-topic"
-                                       placeholder="Enter topic" aria-label="ntfy Topic" onchange="updateSetting('ntfy_topic', this.value)">
-                            </div>
-                        </div>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-name">ntfy Token</div>
-                                <div class="setting-desc">Optional access token</div>
-                            </div>
-                            <div class="setting-control">
-                                <input type="text" class="setting-input" id="setting-ntfy-token"
-                                       placeholder="Enter token" aria-label="ntfy Access Token" onchange="updateSetting('ntfy_token', this.value)">
-                            </div>
-                        </div>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <div class="setting-name">Test ntfy</div>
-                                <div class="setting-desc">Send a test notification</div>
-                            </div>
-                            <div class="setting-control">
-                                <button class="btn btn-secondary btn-sm" id="test-ntfy-btn" onclick="testNtfy()">Test</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <div class="setting-group">
                     <div class="setting-group-title">Interface</div>
                     <div class="setting-item">
@@ -3242,7 +3143,6 @@
             hideEmptyFolders: 'shrinkray-hide-empty-folders',
             selectedPreset: 'shrinkray-selected-preset',
             includeSubfolders: 'shrinkray-include-subfolders',
-            notifyOnComplete: 'shrinkray-notify-on-complete',
             clearRecentlyCompleted: 'shrinkray-clear-recently-completed',
             activeTab: 'shrinkray-active-tab'
         };
@@ -6168,10 +6068,6 @@
                     }
                     updateJobs(data.jobs);
                     updateStats(data.stats);
-                } else if (data.type === 'notify_sent') {
-                    // Notification was sent, uncheck the checkbox
-                    document.getElementById('notify-checkbox').checked = false;
-                    localStorage.setItem(storageKeys.notifyOnComplete, 'false');
                 } else if (data.type === 'batch_added' && data.jobs) {
                     // Performance: Handle batch of jobs in single DOM operation
                     handleBatchAdded(data.jobs);
@@ -6586,15 +6482,6 @@
                 document.getElementById('setting-layout-design').value = layoutDesign;
                 applyLayoutDesign(layoutDesign);
 
-                // Pushover settings
-                document.getElementById('setting-pushover-user').value = config.pushover_user_key || '';
-                document.getElementById('setting-pushover-token').value = config.pushover_app_token || '';
-
-                // ntfy settings
-                document.getElementById('setting-ntfy-server').value = config.ntfy_server || '';
-                document.getElementById('setting-ntfy-topic').value = config.ntfy_topic || '';
-                document.getElementById('setting-ntfy-token').value = config.ntfy_token || '';
-
                 document.getElementById('setting-hide-processing-tmp').checked = config.hide_processing_tmp || false;
                 document.getElementById('setting-allow-software-fallback').checked = config.allow_software_fallback || false;
 
@@ -6614,21 +6501,6 @@
                 document.getElementById('setting-quality-hevc-input').value = hevcQuality;
                 document.getElementById('setting-quality-av1').value = av1Quality;
                 document.getElementById('setting-quality-av1-input').value = av1Quality;
-
-                // Show/hide notify checkbox based on whether any provider is configured
-                const notifyContainer = document.getElementById('notify-container');
-                const notifyCheckbox = document.getElementById('notify-checkbox');
-                if (config.pushover_configured || config.ntfy_configured) {
-                    notifyContainer.style.display = 'flex';
-                    const storedNotify = localStorage.getItem(storageKeys.notifyOnComplete);
-                    const notifyValue = storedNotify !== null ? storedNotify === 'true' : (config.notify_on_complete || false);
-                    notifyCheckbox.checked = notifyValue;
-                    if (notifyValue !== (config.notify_on_complete || false)) {
-                        updateNotifySetting(notifyValue);
-                    }
-                } else {
-                    notifyContainer.style.display = 'none';
-                }
 
                 // Unicorn Mode (stored locally)
                 const unicornEnabled = localStorage.getItem('shrinkray-unicorn') === 'true';
@@ -6669,10 +6541,6 @@
                 statusEl.className = 'settings-status';
                 setTimeout(() => { statusEl.textContent = ''; }, 2000);
 
-                // Reload settings to update notify checkbox visibility
-                if (key === 'pushover_user_key' || key === 'pushover_app_token' || key === 'ntfy_server' || key === 'ntfy_topic' || key === 'ntfy_token') {
-                    loadSettings();
-                }
                 return true;
             } catch (err) {
                 statusEl.textContent = `Error: ${err.message}`;
@@ -6724,71 +6592,6 @@
             } catch (err) {
                 statusEl.textContent = `Error: ${err.message}`;
                 statusEl.className = 'settings-status error';
-            }
-        }
-
-        async function updateNotifySetting(checked) {
-            localStorage.setItem(storageKeys.notifyOnComplete, String(checked));
-            try {
-                await fetch('/api/config', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ notify_on_complete: checked })
-                });
-            } catch (err) {
-                console.error('Update notify setting error:', err);
-            }
-        }
-
-        async function testPushover() {
-            const btn = document.getElementById('test-pushover-btn');
-            const statusEl = document.getElementById('settings-status');
-            btn.disabled = true;
-            btn.textContent = 'Sending...';
-
-            try {
-                const resp = await fetch('/api/pushover/test', { method: 'POST' });
-                const data = await resp.json();
-
-                if (!resp.ok) {
-                    throw new Error(data.error || 'Failed to send test');
-                }
-
-                statusEl.textContent = 'Test notification sent!';
-                statusEl.className = 'settings-status';
-                setTimeout(() => { statusEl.textContent = ''; }, 3000);
-            } catch (err) {
-                statusEl.textContent = `Error: ${err.message}`;
-                statusEl.className = 'settings-status error';
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Test';
-            }
-        }
-
-        async function testNtfy() {
-            const btn = document.getElementById('test-ntfy-btn');
-            const statusEl = document.getElementById('settings-status');
-            btn.disabled = true;
-            btn.textContent = 'Sending...';
-
-            try {
-                const resp = await fetch('/api/ntfy/test', { method: 'POST' });
-                const data = await resp.json();
-
-                if (!resp.ok) {
-                    throw new Error(data.error || 'Failed to send test');
-                }
-
-                statusEl.textContent = 'Test notification sent!';
-                statusEl.className = 'settings-status';
-                setTimeout(() => { statusEl.textContent = ''; }, 3000);
-            } catch (err) {
-                statusEl.textContent = `Error: ${err.message}`;
-                statusEl.className = 'settings-status error';
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Test';
             }
         }
 
