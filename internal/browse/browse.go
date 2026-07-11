@@ -149,7 +149,7 @@ func (b *Browser) Browse(ctx context.Context, path string) (*BrowseResult, error
 			wg.Add(1)
 			go func(entry *Entry, path string) {
 				defer wg.Done()
-				count, size := b.countVideos(path)
+				count, size := b.countVideos(ctx, path)
 				mu.Lock()
 				entry.FileCount = count
 				entry.TotalSize = size
@@ -199,11 +199,16 @@ func (b *Browser) Browse(ctx context.Context, path string) (*BrowseResult, error
 	return result, nil
 }
 
-// countVideos counts video files in a directory recursively
-func (b *Browser) countVideos(dirPath string) (count int, totalSize int64) {
+// countVideos counts video files in a directory recursively.
+// Respects context cancellation to avoid blocking indefinitely on slow/NFS mounts.
+func (b *Browser) countVideos(ctx context.Context, dirPath string) (count int, totalSize int64) {
 	filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Skip errors
+		}
+		// Check for context cancellation
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 		// Skip hidden files and directories
 		if strings.HasPrefix(info.Name(), ".") {
