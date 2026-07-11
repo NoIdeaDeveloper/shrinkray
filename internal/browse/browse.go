@@ -235,6 +235,8 @@ func (b *Browser) countVideos(ctx context.Context, dirPath string) (count int, t
 	return count, totalSize
 }
 
+const maxCacheSize = 1000
+
 // getProbeResult returns a cached or fresh probe result
 func (b *Browser) getProbeResult(ctx context.Context, path string) *ffmpeg.ProbeResult {
 	// Check cache
@@ -254,6 +256,10 @@ func (b *Browser) getProbeResult(ctx context.Context, path string) *ffmpeg.Probe
 
 	// Cache the result
 	b.cacheMu.Lock()
+	// Evict entire cache if it exceeds the max size to prevent unbounded growth
+	if len(b.cache) >= maxCacheSize {
+		b.cache = make(map[string]*ffmpeg.ProbeResult)
+	}
 	b.cache[path] = result
 	b.cacheMu.Unlock()
 
