@@ -329,7 +329,12 @@ func BuildPresetArgs(preset *Preset, sourceBitrate int64, subtitleCodecs []strin
 		// Color output params for scale_vaapi to prevent reconfiguration
 		// out_range=tv (limited range), out_color_matrix, out_color_primaries, out_color_transfer
 		colorParams := "out_range=tv:out_color_matrix=bt709:out_color_primaries=bt709:out_color_transfer=bt709"
-		if bitDepth >= 10 {
+		if bitDepth >= 12 {
+			vaapiFormat = "p012"
+			swFormat = "p012le" // little-endian for hwupload compatibility
+			// For 12-bit HDR content, use bt2020 color space with PQ transfer (HDR10)
+			colorParams = "out_range=tv:out_color_matrix=bt2020nc:out_color_primaries=bt2020:out_color_transfer=smpte2084"
+		} else if bitDepth >= 10 {
 			vaapiFormat = "p010"
 			swFormat = "p010le" // little-endian for hwupload compatibility
 			// For 10-bit/HDR content, use bt2020 color space with PQ transfer (HDR10)
@@ -372,7 +377,13 @@ func BuildPresetArgs(preset *Preset, sourceBitrate int64, subtitleCodecs []strin
 		if scaleFilter == "" {
 			scaleFilter = "scale"
 		}
-		if bitDepth >= 10 {
+		if bitDepth >= 12 {
+			// Preserve 12-bit pixel format for HDR content
+			scaleFilter = fmt.Sprintf("%s=-2:'min(ih,%d)':flags=neighbor", scaleFilter, preset.MaxHeight)
+			outputArgs = append(outputArgs,
+				"-filter:v:0", fmt.Sprintf("format=p012le,%s", scaleFilter),
+			)
+		} else if bitDepth >= 10 {
 			// Preserve 10-bit pixel format for HDR content
 			scaleFilter = fmt.Sprintf("%s=-2:'min(ih,%d)':flags=neighbor", scaleFilter, preset.MaxHeight)
 			outputArgs = append(outputArgs,
