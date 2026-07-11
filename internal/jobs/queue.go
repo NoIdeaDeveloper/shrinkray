@@ -1250,13 +1250,16 @@ func (q *Queue) Subscribe() chan JobEvent {
 	return ch
 }
 
-// Unsubscribe removes a subscription
+// Unsubscribe removes a subscription.
+// The channel is not closed to prevent a race with broadcast: broadcast
+// may hold subsMu.RLock and attempt to send on the channel. If we closed
+// the channel here, that send would panic. Instead, the channel is
+// simply removed from the map and left for GC to collect when the SSE
+// handler exits via r.Context().Done().
 func (q *Queue) Unsubscribe(ch chan JobEvent) {
 	q.subsMu.Lock()
 	delete(q.subscribers, ch)
 	q.subsMu.Unlock()
-
-	close(ch)
 }
 
 // broadcast sends an event to all subscribers
