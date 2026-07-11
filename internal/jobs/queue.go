@@ -1012,6 +1012,38 @@ func (q *Queue) ForceRetryJob(id string) error {
 	return nil
 }
 
+// RequeueJob resets a running job to pending so it can be picked up by
+// another worker. Used during pool resize to avoid losing in-progress work.
+func (q *Queue) RequeueJob(id string) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	job, ok := q.jobs[id]
+	if !ok {
+		return fmt.Errorf("job not found: %s", id)
+	}
+
+	if job.Status != StatusRunning {
+		return fmt.Errorf("can only requeue running jobs, got: %s", job.Status)
+	}
+
+	job.Status = StatusPending
+	job.Progress = 0
+	job.Speed = 0
+	job.ETA = ""
+	job.StartedAt = time.Time{}
+	job.TempPath = ""
+	job.HardwarePath = ""
+
+	if err := q.save(); err != nil {
+		log.Printf("[queue] Warning: failed to persist queue: %v", err)
+	}
+
+	q.broadcast(JobEvent{Type: "added", Job: job})
+
+	return nil
+}
+
 // CancelJob cancels a job
 func (q *Queue) CancelJob(id string) error {
 	q.mu.Lock()

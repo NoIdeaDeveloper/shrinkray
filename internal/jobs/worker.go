@@ -30,9 +30,10 @@ type Worker struct {
 	wg     sync.WaitGroup
 
 	// Currently running job (for cancellation)
-	currentJobMu sync.Mutex
-	currentJob   *Job
-	jobCancel    context.CancelFunc
+	currentJobMu   sync.Mutex
+	currentJob     *Job
+	jobCancel      context.CancelFunc
+	requeueOnStop  bool // when true, processJob requeues instead of cancelling
 }
 
 // WorkerPool manages multiple workers
@@ -228,7 +229,7 @@ func (p *WorkerPool) Resize(n int) {
 			if cancelled >= workersToStop {
 				break
 			}
-			rj.worker.CancelAndStop()
+			rj.worker.RequeueAndStop()
 
 			// Remove this worker from the pool
 			for j, w := range p.workers {
@@ -347,7 +348,14 @@ func (w *Worker) processJob(job *Job) {
 		probe, err := w.prober.Probe(jobCtx, job.InputPath)
 		if err != nil {
 			if jobCtx.Err() != nil {
-				w.queue.CancelJob(job.ID)
+				w.currentJobMu.Lock()
+				requeue := w.requeueOnStop
+				w.currentJobMu.Unlock()
+				if requeue {
+					w.queue.RequeueJob(job.ID)
+				} else {
+					w.queue.CancelJob(job.ID)
+				}
 			} else {
 				w.queue.FailJob(job.ID, fmt.Sprintf("probe failed: %v", err))
 			}
@@ -426,7 +434,14 @@ func (w *Worker) processJob(job *Job) {
 		if jobCtx.Err() == context.Canceled {
 			// Clean up temp file
 			os.Remove(tempPath)
-			w.queue.CancelJob(job.ID)
+			w.currentJobMu.Lock()
+			requeue := w.requeueOnStop
+			w.currentJobMu.Unlock()
+			if requeue {
+				w.queue.RequeueJob(job.ID)
+			} else {
+				w.queue.CancelJob(job.ID)
+			}
 			return
 		}
 
@@ -478,7 +493,14 @@ func (w *Worker) processJob(job *Job) {
 	// Check if the job was cancelled during transcode
 	if jobCtx.Err() != nil {
 		os.Remove(tempPath)
-		w.queue.CancelJob(job.ID)
+		w.currentJobMu.Lock()
+		requeue := w.requeueOnStop
+		w.currentJobMu.Unlock()
+		if requeue {
+			w.queue.RequeueJob(job.ID)
+		} else {
+			w.queue.CancelJob(job.ID)
+		}
 		return
 	}
 
@@ -565,6 +587,19 @@ func (w *Worker) CancelAndStop() {
 	w.currentJobMu.Unlock()
 
 	// Then stop the worker
+	w.Stop()
+}
+
+// RequeueAndStop requeues the current job to pending and stops the worker.
+// Used during pool resize to avoid losing in-progress work.
+func (w *Worker) RequeueAndStop() {
+	w.currentJobMu.Lock()
+	w.requeueOnStop = true
+	if w.jobCancel != nil {
+		w.jobCancel()
+	}
+	w.currentJobMu.Unlock()
+
 	w.Stop()
 }
 
