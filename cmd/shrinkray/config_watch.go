@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -40,6 +41,10 @@ func startConfigWatcher(ctx context.Context, cfgPath string, handler *api.Handle
 		cfgPathAbs = cfgPath
 	}
 
+	// Track in-flight reloads so shutdown can wait for them to complete
+	var reloadWG sync.WaitGroup
+	reloadDone := make(chan struct{})
+
 	reloadCh := make(chan struct{}, 1)
 	go func() {
 		defer watcher.Close()
@@ -50,6 +55,9 @@ func startConfigWatcher(ctx context.Context, cfgPath string, handler *api.Handle
 				timer.Stop()
 			}
 			timer = time.AfterFunc(250*time.Millisecond, func() {
+				reloadWG.Add(1)
+				defer reloadWG.Done()
+
 				newCfg, err := config.Load(cfgPath)
 				if err != nil {
 					log.Printf("Warning: Failed to reload config from %s: %v", cfgPath, err)
@@ -81,11 +89,20 @@ func startConfigWatcher(ctx context.Context, cfgPath string, handler *api.Handle
 				if timer != nil {
 					timer.Stop()
 				}
+				// Wait for any in-flight reload to finish before signaling done
+				go func() {
+					reloadWG.Wait()
+					close(reloadDone)
+				}()
 				return
 			case <-reloadCh:
 				triggerReload()
 			case event, ok := <-watcher.Events:
 				if !ok {
+					go func() {
+						reloadWG.Wait()
+						close(reloadDone)
+					}()
 					return
 				}
 				if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename) == 0 {
@@ -104,10 +121,29 @@ func startConfigWatcher(ctx context.Context, cfgPath string, handler *api.Handle
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
+					go func() {
+						reloadWG.Wait()
+						close(reloadDone)
+					}()
 					return
 				}
 				log.Printf("Warning: Config watcher error: %v", err)
 			}
 		}
 	}()
+
+	// Store reloadDone for the caller to wait on during shutdown
+	// The caller (main.go) should call WaitConfigReload() after ctx cancel
+	configWatcherDone = reloadDone
+}
+
+// configWatcherDone is set by startConfigWatcher; main calls WaitConfigReload during shutdown
+var configWatcherDone chan struct{}
+
+// WaitConfigReload blocks until any in-flight config reload has completed.
+// Call after cancelling the watcher context to prevent reloads from racing shutdown.
+func WaitConfigReload() {
+	if configWatcherDone != nil {
+		<-configWatcherDone
+	}
 }

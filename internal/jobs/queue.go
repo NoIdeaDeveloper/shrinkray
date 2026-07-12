@@ -110,6 +110,13 @@ func (q *Queue) load() error {
 	// Reset any running jobs to pending (they were interrupted)
 	for _, job := range q.jobs {
 		if job.Status == StatusRunning {
+			// Clean up orphaned temp file from the interrupted transcode
+			if job.TempPath != "" {
+				if err := os.Remove(job.TempPath); err != nil && !os.IsNotExist(err) {
+					log.Printf("[queue] Warning: failed to remove orphaned temp file %s: %v", job.TempPath, err)
+				}
+				job.TempPath = ""
+			}
 			job.Status = StatusPending
 			job.Progress = 0
 			job.Speed = 0
@@ -176,7 +183,19 @@ func (q *Queue) writeToFile(pd persistenceData) error {
 
 	// Write to temp file first, then rename (atomic)
 	tmpPath := q.filePath + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+	f, err := os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
 		return err
 	}
 

@@ -20,6 +20,10 @@ import (
 
 func setupTestHandler(t *testing.T) (*Handler, string) {
 	tmpDir := t.TempDir()
+	// Resolve symlinks (macOS /var -> /private/var) so paths match Browse output
+	if resolved, err := filepath.EvalSymlinks(tmpDir); err == nil {
+		tmpDir = resolved
+	}
 
 	// Create test directory structure
 	tvDir := filepath.Join(tmpDir, "TV Shows", "Test Show", "Season 1")

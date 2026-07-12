@@ -13,6 +13,10 @@ import (
 func TestBrowser(t *testing.T) {
 	// Create a test directory structure
 	tmpDir := t.TempDir()
+	// Resolve symlinks (macOS /var -> /private/var) so paths match Browse output
+	if resolved, err := filepath.EvalSymlinks(tmpDir); err == nil {
+		tmpDir = resolved
+	}
 
 	// Create directories
 	tvDir := filepath.Join(tmpDir, "TV Shows")
@@ -103,6 +107,9 @@ func TestBrowser(t *testing.T) {
 
 func TestBrowserSecurity(t *testing.T) {
 	tmpDir := t.TempDir()
+	if resolved, err := filepath.EvalSymlinks(tmpDir); err == nil {
+		tmpDir = resolved
+	}
 
 	prober := ffmpeg.NewProber("ffprobe")
 	browser := NewBrowser(prober, tmpDir)

@@ -65,6 +65,11 @@ func normalizeMediaRoot(mediaRoot string) string {
 	if err != nil {
 		return mediaRoot
 	}
+	// Resolve symlinks so that the containment check in Browse
+	// (which resolves symlinks on the requested path) compares like-for-like
+	if resolved, err := filepath.EvalSymlinks(absRoot); err == nil {
+		return resolved
+	}
 	return absRoot
 }
 
@@ -97,6 +102,14 @@ func (b *Browser) Browse(ctx context.Context, path string) (*BrowseResult, error
 		cleanPath = filepath.Clean(path)
 	}
 	mediaRoot := b.MediaRoot()
+
+	// Resolve symlinks before containment check to prevent traversal
+	// via symlinks pointing outside the media root
+	if resolved, err := filepath.EvalSymlinks(cleanPath); err == nil {
+		cleanPath = resolved
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
 
 	// Ensure path is within media root (separator-aware boundary check)
 	if cleanPath != mediaRoot && !strings.HasPrefix(cleanPath, mediaRoot+string(filepath.Separator)) {

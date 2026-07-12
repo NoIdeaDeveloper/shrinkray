@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -204,7 +205,8 @@ func applyFeatureFlagEnvOverrides(cfg *Config) {
 }
 
 // envBool parses a boolean from an environment variable value
-// Accepts: "1", "true", "yes", "on" for true; anything else is false
+// Accepts: "1", "true", "yes", "on" for true; "0", "false", "no", "off", "" for false
+// Unrecognized values are logged and treated as false
 func envBool(v string) bool {
 	b, err := strconv.ParseBool(v)
 	if err == nil {
@@ -216,7 +218,8 @@ func envBool(v string) bool {
 	case "no", "off":
 		return false
 	}
-	return v == "1"
+	log.Printf("[config] Warning: unrecognized boolean value %q, treating as false", v)
+	return false
 }
 
 // Save writes the config to a YAML file
