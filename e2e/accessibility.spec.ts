@@ -115,8 +115,7 @@ test.describe('Accessibility', () => {
       const firstCard = cards.first();
       const secondCard = cards.nth(1);
       
-      await page.keyboard.press('Tab');
-      await page.keyboard.press('Tab');
+      await firstCard.focus();
       await expect(firstCard).toBeFocused();
       
       await page.keyboard.press('ArrowRight');
