@@ -19,7 +19,24 @@ func limitBody(handler http.Handler) http.Handler {
 
 // NewRouter creates a new HTTP router with all API endpoints
 // debugMode determines which UI to serve (true = debug UI, false = production UI)
-func NewRouter(h *Handler, staticFS embed.FS, debugMode bool) *http.ServeMux {
+// The returned handler is wrapped with gzip compression middleware.
+func NewRouter(h *Handler, staticFS embed.FS, debugMode bool) http.Handler {
+	return wrapWithGzip(newRouterMux(h, staticFS, debugMode))
+}
+
+// NewRouterWithoutStatic creates a router without static file serving (for testing)
+// and wraps it with gzip compression middleware.
+func NewRouterWithoutStatic(h *Handler) http.Handler {
+	return wrapWithGzip(newRouterWithoutStaticMux(h))
+}
+
+// wrapWithGzip wraps a handler with the gzip compression middleware.
+func wrapWithGzip(h http.Handler) http.Handler {
+	return GzipMiddleware(h)
+}
+
+// newRouterMux creates a new HTTP router with all API endpoints and static file serving.
+func newRouterMux(h *Handler, staticFS embed.FS, debugMode bool) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	wrap := func(handler http.Handler) http.Handler {
@@ -135,8 +152,8 @@ func NewRouter(h *Handler, staticFS embed.FS, debugMode bool) *http.ServeMux {
 	return mux
 }
 
-// NewRouterWithoutStatic creates a router without static file serving (for testing)
-func NewRouterWithoutStatic(h *Handler) *http.ServeMux {
+// newRouterWithoutStaticMux creates a router without static file serving (for testing).
+func newRouterWithoutStaticMux(h *Handler) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	wrap := func(handler http.Handler) http.Handler {

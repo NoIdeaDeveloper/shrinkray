@@ -6,6 +6,20 @@
     <title>Shrinkray</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="stylesheet" href="/fonts/fonts.css">
+    <script>
+        // Apply theme immediately to prevent flash of wrong theme (FOUC).
+        // Must run before the body renders; reads localStorage then system preference.
+        (function() {
+            try {
+                var saved = localStorage.getItem('shrinkray-theme');
+                var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+                document.documentElement.setAttribute('data-theme', theme);
+            } catch (e) {
+                // localStorage unavailable; default to light theme
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+        })();
+    </script>
     <style>
         :root {
             --bg-primary: #FAFAFA;
@@ -856,12 +870,6 @@
             flex-direction: column;
             max-height: 100%;
             flex: 1;
-        }
-
-        .panel-body {
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
         }
 
         .panel-body {
@@ -3090,13 +3098,6 @@
             applyTheme(next);
         }
 
-        // Apply theme immediately to prevent flash
-        (function() {
-            const saved = localStorage.getItem('shrinkray-theme');
-            const theme = saved || getSystemTheme();
-            document.documentElement.setAttribute('data-theme', theme);
-        })();
-
         // 🦄 Unicorn Mode (purely cosmetic, easy to remove)
         function toggleUnicornMode(enabled) {
             document.documentElement.setAttribute('data-unicorn', enabled);
@@ -4371,6 +4372,16 @@
         async function startJobs() {
             if (selectedPaths.size === 0) return;
 
+            const btn = document.getElementById('start-btn');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Starting...';
+
+            const restoreButton = () => {
+                btn.textContent = originalText;
+                btn.disabled = selectedPaths.size === 0;
+            };
+
             try {
                 const preset = document.getElementById('preset-select').value;
                 const includeSubfolders = document.getElementById('include-subfolders').checked;
@@ -4416,14 +4427,15 @@
                 // Check for validation errors (bad request)
                 if (data.error) {
                     alert(data.error);
+                    restoreButton();
                     return;
                 }
 
                 // Clear selections immediately - jobs will appear via SSE as they're processed
                 clearSelections();
-
             } catch (err) {
                 console.error('Start jobs error:', err);
+                restoreButton();
             }
         }
 
@@ -5191,6 +5203,24 @@
             updateActivePanel();
         }
 
+        // renderQueueEmpty returns the HTML string for the empty-queue state.
+        // Used in 3 places: initial HTML, handleJobRemoved, and updateJobs.
+        function renderQueueEmpty() {
+            return `
+                <div class="queue-empty">
+                    <div class="queue-empty-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.3">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <path d="M3 9h18"/>
+                            <path d="M9 21V9"/>
+                        </svg>
+                    </div>
+                    <div>No jobs in queue</div>
+                    <div style="font-size: 0.8125rem; margin-top: 4px; color: var(--text-tertiary)">Select files and start transcoding</div>
+                </div>
+            `;
+        }
+
         function handleJobRemoved(job) {
             const idx = cachedJobs.findIndex(j => j.id === job.id);
             if (idx >= 0) {
@@ -5227,19 +5257,7 @@
             const activeJobs = cachedJobs.filter(j => j.status !== 'complete');
             const container = document.getElementById('queue-list');
             if (activeJobs.length === 0 && container) {
-                container.innerHTML = `
-                    <div class="queue-empty">
-                        <div class="queue-empty-icon">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.3">
-                                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                                <path d="M3 9h18"/>
-                                <path d="M9 21V9"/>
-                            </svg>
-                        </div>
-                        <div>No jobs in queue</div>
-                        <div style="font-size: 0.8125rem; margin-top: 4px; color: var(--text-tertiary)">Select files and start transcoding</div>
-                    </div>
-                `;
+                container.innerHTML = renderQueueEmpty();
             }
 
             updateActivePanel();
@@ -5295,19 +5313,7 @@
             // Queue panel shows only pending/pending_probe/cancelled jobs
             // Running jobs are shown in the Active panel instead
             if (queueJobs.length === 0) {
-                container.innerHTML = `
-                    <div class="queue-empty">
-                        <div class="queue-empty-icon">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.3">
-                                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                                <path d="M3 9h18"/>
-                                <path d="M9 21V9"/>
-                            </svg>
-                        </div>
-                        <div>No jobs in queue</div>
-                        <div style="font-size: 0.8125rem; margin-top: 4px; color: var(--text-tertiary)">Select files and start transcoding</div>
-                    </div>
-                `;
+                container.innerHTML = renderQueueEmpty();
                 updateActivePanel();
                 return;
             }
