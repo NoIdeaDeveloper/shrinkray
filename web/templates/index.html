@@ -6039,32 +6039,24 @@
         }
 
         let sseInitReceived = false;
-        let sseInitFallbackTimer = null;
+        let sseReconnectTimer = null;
 
         function connectSSE() {
-            if (eventSource) eventSource.close();
+            if (eventSource) {
+                eventSource.onmessage = null;
+                eventSource.onerror = null;
+                eventSource.onopen = null;
+                eventSource.close();
+            }
             sseInitReceived = false;
 
             eventSource = new EventSource('/api/jobs/stream');
-
-            // Fallback: if SSE doesn't send init within 2s, fetch jobs via REST
-            if (sseInitFallbackTimer) clearTimeout(sseInitFallbackTimer);
-            sseInitFallbackTimer = setTimeout(() => {
-                if (!sseInitReceived) {
-                    console.log('SSE init timeout, fetching jobs via REST fallback');
-                    refreshJobs();
-                }
-            }, 2000);
 
             eventSource.onmessage = (event) => {
                 try {
                 const data = JSON.parse(event.data);
                 if (data.type === 'init') {
                     sseInitReceived = true;
-                    if (sseInitFallbackTimer) {
-                        clearTimeout(sseInitFallbackTimer);
-                        sseInitFallbackTimer = null;
-                    }
                     updateJobs(data.jobs);
                     updateStats(data.stats);
                 } else if (data.type === 'batch_added' && data.jobs) {
@@ -6129,8 +6121,18 @@
             };
 
             eventSource.onerror = () => {
+                // EventSource auto-reconnects — don't create a new one unless
+                // the browser has given up (readyState === CLOSED).
+                // Just show the offline banner while reconnection is in progress.
                 document.getElementById('offline-banner').style.display = 'flex';
-                setTimeout(connectSSE, 2000);
+
+                if (eventSource.readyState === EventSource.CLOSED) {
+                    // Browser gave up — manually reconnect after delay
+                    if (sseReconnectTimer) clearTimeout(sseReconnectTimer);
+                    sseReconnectTimer = setTimeout(() => {
+                        connectSSE();
+                    }, 2000);
+                }
             };
         }
 
@@ -6671,7 +6673,8 @@
         history.replaceState({ path: initialPath }, '', window.location.href);
         browse(initialPath, false, { updateHistory: false });
         attachQueueDragHandlers();
-        connectSSE();
+        refreshJobs();  // Fetch initial jobs via REST for immediate display
+        connectSSE();   // SSE provides incremental updates on top of REST baseline
         setInterval(updateElapsedDisplays, 1000);
         loadSettings();
         loadPresets();
