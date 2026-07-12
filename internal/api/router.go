@@ -5,8 +5,6 @@ import (
 	"io/fs"
 	"net/http"
 	"strings"
-
-	"github.com/gwlsn/shrinkray/internal/auth"
 )
 
 const maxBodyBytes = 10 << 20 // 10 MB
@@ -21,20 +19,11 @@ func limitBody(handler http.Handler) http.Handler {
 
 // NewRouter creates a new HTTP router with all API endpoints
 // debugMode determines which UI to serve (true = debug UI, false = production UI)
-func NewRouter(h *Handler, staticFS embed.FS, debugMode bool, authMiddleware *auth.Middleware) *http.ServeMux {
+func NewRouter(h *Handler, staticFS embed.FS, debugMode bool) *http.ServeMux {
 	mux := http.NewServeMux()
 
-	provider := auth.Provider(nil)
-	if authMiddleware != nil {
-		provider = authMiddleware.Provider
-	}
-
 	wrap := func(handler http.Handler) http.Handler {
-		handler = limitBody(handler)
-		if authMiddleware == nil {
-			return handler
-		}
-		return authMiddleware.Wrap(handler)
+		return limitBody(handler)
 	}
 
 	// Health check
@@ -42,12 +31,6 @@ func NewRouter(h *Handler, staticFS embed.FS, debugMode bool, authMiddleware *au
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})))
-
-	// Auth callbacks
-	mux.Handle("GET /auth/callback", wrap(auth.CallbackHandler(provider)))
-	mux.Handle("GET /auth/login", wrap(auth.LoginHandler(provider)))
-	mux.Handle("POST /auth/login", wrap(auth.LoginHandler(provider)))
-	mux.Handle("POST /auth/logout", wrap(auth.LogoutHandler(provider)))
 
 	// API routes
 	mux.Handle("GET /api/browse", wrap(http.HandlerFunc(h.Browse)))
@@ -153,20 +136,11 @@ func NewRouter(h *Handler, staticFS embed.FS, debugMode bool, authMiddleware *au
 }
 
 // NewRouterWithoutStatic creates a router without static file serving (for testing)
-func NewRouterWithoutStatic(h *Handler, authMiddleware *auth.Middleware) *http.ServeMux {
+func NewRouterWithoutStatic(h *Handler) *http.ServeMux {
 	mux := http.NewServeMux()
 
-	provider := auth.Provider(nil)
-	if authMiddleware != nil {
-		provider = authMiddleware.Provider
-	}
-
 	wrap := func(handler http.Handler) http.Handler {
-		handler = limitBody(handler)
-		if authMiddleware == nil {
-			return handler
-		}
-		return authMiddleware.Wrap(handler)
+		return limitBody(handler)
 	}
 
 	// Health check
@@ -174,12 +148,6 @@ func NewRouterWithoutStatic(h *Handler, authMiddleware *auth.Middleware) *http.S
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})))
-
-	// Auth callbacks
-	mux.Handle("GET /auth/callback", wrap(auth.CallbackHandler(provider)))
-	mux.Handle("GET /auth/login", wrap(auth.LoginHandler(provider)))
-	mux.Handle("POST /auth/login", wrap(auth.LoginHandler(provider)))
-	mux.Handle("POST /auth/logout", wrap(auth.LogoutHandler(provider)))
 
 	// API routes
 	mux.Handle("GET /api/browse", wrap(http.HandlerFunc(h.Browse)))

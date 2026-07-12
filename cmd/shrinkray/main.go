@@ -16,8 +16,6 @@ import (
 
 	shrinkray "github.com/gwlsn/shrinkray"
 	"github.com/gwlsn/shrinkray/internal/api"
-	"github.com/gwlsn/shrinkray/internal/auth"
-	"github.com/gwlsn/shrinkray/internal/auth/password"
 	"github.com/gwlsn/shrinkray/internal/browse"
 	"github.com/gwlsn/shrinkray/internal/config"
 	"github.com/gwlsn/shrinkray/internal/ffmpeg"
@@ -140,37 +138,7 @@ func main() {
 	// Create API handler
 	handler := api.NewHandler(browser, queue, workerPool, cfg, cfgPath)
 
-	authRegistry := auth.NewRegistry()
-	authRegistry.Register("noop", auth.NewNoopProvider())
-
-	providerName := cfg.Auth.Provider
-	if providerName == "" {
-		if cfg.Auth.Enabled {
-			log.Printf("[auth] Warning: auth is enabled but no provider configured, defaulting to noop (auth disabled)")
-		}
-		providerName = "noop"
-	}
-
-	var authMiddleware *auth.Middleware
-	if cfg.Auth.Enabled {
-		if providerName == "password" {
-			passwordProvider, err := password.NewProvider(cfg.Auth.Password.Users, cfg.Auth.Password.HashAlgo, cfg.Auth.Secret)
-			if err != nil {
-				log.Fatalf("Failed to initialize password auth: %v", err)
-			}
-			authRegistry.Register("password", passwordProvider)
-		}
-
-		authProvider, ok := authRegistry.Provider(providerName)
-		if !ok {
-			log.Fatalf("Unknown auth provider: %s", providerName)
-		}
-
-		bypassPaths := append(auth.DefaultBypassPaths(), cfg.Auth.BypassPaths...)
-		authMiddleware = auth.NewMiddleware(authProvider, bypassPaths)
-	}
-
-	router := api.NewRouter(handler, shrinkray.WebFS, *debugUI, authMiddleware)
+	router := api.NewRouter(handler, shrinkray.WebFS, *debugUI)
 
 	// Start config watcher
 	watchCtx, watchCancel := context.WithCancel(context.Background())

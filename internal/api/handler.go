@@ -616,8 +616,6 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 		"schedule_end_hour":       h.cfg.ScheduleEndHour,
 		"keep_larger_files":       h.cfg.KeepLargerFiles,
 		"layout_design":           h.cfg.LayoutDesign,
-		"auth_enabled":            h.cfg.Auth.Enabled,
-		"auth_provider":           h.cfg.Auth.Provider,
 		// Feature flags for frontend
 		"features": map[string]bool{
 			"virtual_scroll":   h.cfg.Features.VirtualScroll,
