@@ -3,8 +3,7 @@ name: Build and Publish Docker Image
 on:
   push:
     branches:
-      - main
-      - 'claude/**'  # Build branches for testing before merge
+      - '**'  # Build on every push to any branch
   workflow_dispatch:
     inputs:
       custom_tag:
