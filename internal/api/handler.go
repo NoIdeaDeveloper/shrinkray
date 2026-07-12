@@ -405,17 +405,12 @@ func (h *Handler) CancelJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if job.Status == jobs.StatusFailed || job.Status == jobs.StatusCancelled {
+	if job.Status == jobs.StatusFailed || job.Status == jobs.StatusCancelled || job.Status == jobs.StatusComplete {
 		if _, err := h.queue.Remove(id); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "removed"})
-		return
-	}
-
-	if job.Status == jobs.StatusComplete {
-		writeError(w, http.StatusConflict, "completed jobs cannot be removed")
 		return
 	}
 

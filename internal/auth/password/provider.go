@@ -109,9 +109,8 @@ func (p *Provider) HandleLogin(w http.ResponseWriter, r *http.Request) error {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shrinkray Login</title>
-    <link rel="preconnect" href="https://fonts.bunny.net">
     <link rel="icon" type="image/png" href="/favicon.png">
-    <link href="https://fonts.bunny.net/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/fonts/fonts.css">
     <style>
         :root {
             --bg-primary: #FAFAFA;

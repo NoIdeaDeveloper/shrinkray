@@ -1,6 +1,9 @@
 package auth
 
-import "net/http"
+import (
+	"log"
+	"net/http"
+)
 
 // LoginHandlerProvider allows providers to implement login handling.
 type LoginHandlerProvider interface {
@@ -15,7 +18,8 @@ func CallbackHandler(provider Provider) http.HandlerFunc {
 			return
 		}
 		if err := provider.HandleCallback(w, r); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			log.Printf("[auth] Callback error: %v", err)
+			http.Error(w, "authentication failed", http.StatusBadRequest)
 		}
 	}
 }
@@ -29,7 +33,8 @@ func LoginHandler(provider Provider) http.HandlerFunc {
 			return
 		}
 		if err := loginProvider.HandleLogin(w, r); err != nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+			log.Printf("[auth] Login error: %v", err)
+			http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		}
 	}
 }
@@ -43,7 +48,8 @@ func LogoutHandler(provider Provider) http.HandlerFunc {
 			return
 		}
 		if err := logoutProvider.HandleLogout(w, r); err != nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+			log.Printf("[auth] Logout error: %v", err)
+			http.Error(w, "logout failed", http.StatusUnauthorized)
 		}
 	}
 }

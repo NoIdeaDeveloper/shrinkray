@@ -4,6 +4,7 @@ import (
 	"embed"
 	"io/fs"
 	"net/http"
+	"strings"
 
 	"github.com/gwlsn/shrinkray/internal/auth"
 )
@@ -46,7 +47,6 @@ func NewRouter(h *Handler, staticFS embed.FS, debugMode bool, authMiddleware *au
 	mux.Handle("GET /auth/callback", wrap(auth.CallbackHandler(provider)))
 	mux.Handle("GET /auth/login", wrap(auth.LoginHandler(provider)))
 	mux.Handle("POST /auth/login", wrap(auth.LoginHandler(provider)))
-	mux.Handle("GET /auth/logout", wrap(auth.LogoutHandler(provider)))
 	mux.Handle("POST /auth/logout", wrap(auth.LogoutHandler(provider)))
 
 	// API routes
@@ -128,6 +128,25 @@ func NewRouter(h *Handler, staticFS embed.FS, debugMode bool, authMiddleware *au
 			w.Header().Set("Cache-Control", "public, max-age=86400")
 			w.Write(content)
 		})))
+
+		// Serve fonts (self-hosted, no external CDN)
+		mux.Handle("GET /fonts/", wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Strip the leading slash — fs.Sub paths are relative
+			filePath := strings.TrimPrefix(r.URL.Path, "/")
+			content, err := fs.ReadFile(staticSubFS, filePath)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			// Set content type based on file extension
+			if strings.HasSuffix(r.URL.Path, ".css") {
+				w.Header().Set("Content-Type", "text/css; charset=utf-8")
+			} else if strings.HasSuffix(r.URL.Path, ".woff2") {
+				w.Header().Set("Content-Type", "font/woff2")
+			}
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+			w.Write(content)
+		})))
 	}
 
 	return mux
@@ -160,7 +179,6 @@ func NewRouterWithoutStatic(h *Handler, authMiddleware *auth.Middleware) *http.S
 	mux.Handle("GET /auth/callback", wrap(auth.CallbackHandler(provider)))
 	mux.Handle("GET /auth/login", wrap(auth.LoginHandler(provider)))
 	mux.Handle("POST /auth/login", wrap(auth.LoginHandler(provider)))
-	mux.Handle("GET /auth/logout", wrap(auth.LogoutHandler(provider)))
 	mux.Handle("POST /auth/logout", wrap(auth.LogoutHandler(provider)))
 
 	// API routes
