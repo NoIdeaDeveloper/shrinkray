@@ -4,7 +4,7 @@
   <p><strong>Simple video transcoding for Unraid</strong></p>
   <p>Select a folder. Pick a preset. Shrink your media library.</p>
 
-  ![Go](https://img.shields.io/badge/go-1.22+-00ADD8?style=flat-square&logo=go)
+  ![Go](https://img.shields.io/badge/go-1.24+-00ADD8?style=flat-square&logo=go)
   ![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
   ![Docker](https://img.shields.io/badge/docker-ghcr.io-2496ED?style=flat-square&logo=docker)
 </div>
@@ -15,20 +15,20 @@
 
 This is a community fork of [gwlsn/shrinkray](https://github.com/gwlsn/shrinkray), the excellent video transcoding tool created by [@gwlsn](https://github.com/gwlsn).
 
-Both projects share the same core goal: make video transcoding simple and accessible. This fork extends the original with additional features for users who need authentication or have specific hardware configurations.
+Both projects share the same core goal: make video transcoding simple and accessible. This fork is streamlined for local-network deployments: authentication and outbound notification services (Pushover, ntfy) were removed to reduce attack surface and external dependencies. The focus is on VAAPI reliability, performance, and a clean, single-purpose codebase.
 
 ### Which Should You Use?
 
 | Use Case | Recommendation |
 |----------|----------------|
-| Simple home setup, no auth needed | [Original](https://github.com/gwlsn/shrinkray) — cleaner, more focused |
 | Intel Arc GPU (A380, A770, B580) | **This fork** — extensive VAAPI fixes |
 | AMD GPU on Linux | **This fork** — improved VAAPI support |
-| Need authentication (OIDC/password) | **This fork** — full auth support |
-| Want ntfy notifications | **This fork** — ntfy + Pushover |
+| Want the simplest local setup | **This fork** — no auth or external services to configure |
+| Need authentication (OIDC/password) | [Original by @jesposito](https://github.com/jesposito/shrinkray) — full auth support |
+| Want Pushover or ntfy notifications | [Original by @jesposito](https://github.com/jesposito/shrinkray) |
 | Prefer mature, stable release | [Original](https://github.com/gwlsn/shrinkray) |
 
-Both versions include: GPU acceleration, scheduling, quality controls, batch selection, Pushover notifications, and smart skipping.
+Both versions include: GPU acceleration, scheduling, quality controls, batch selection, and smart skipping.
 
 ---
 
@@ -40,9 +40,8 @@ Both versions include: GPU acceleration, scheduling, quality controls, batch sel
 - **Scheduling** — Restrict transcoding to specific hours (e.g., overnight only)
 - **Quality Control** — Adjustable CRF for fine-tuned compression
 - **Smart Skipping** — Automatically skips files already in target codec/resolution
-- **Authentication** — Password or OIDC (Authentik, Keycloak, etc.)
-- **Notifications** — Pushover and ntfy support
 - **CPU Fallback** — Optional automatic retry with software encoding
+- **Local Only** — No authentication or outbound network calls by design
 
 ---
 
@@ -51,7 +50,7 @@ Both versions include: GPU acceleration, scheduling, quality controls, batch sel
 ### Unraid (Community Applications)
 
 1. Search **"Shrinkray"** in Community Applications, or add manually:
-   - **Repository**: `ghcr.io/jesposito/shrinkray:latest`
+   - **Repository**: `ghcr.io/noideadeveloper/shrinkray:latest`
    - **WebUI**: `8080`
    - **Volumes**: `/config` → appdata, `/media` → your media library
 2. For GPU acceleration, pass through your GPU device (see [Hardware Acceleration](#hardware-acceleration))
@@ -62,7 +61,7 @@ Both versions include: GPU acceleration, scheduling, quality controls, batch sel
 ```yaml
 services:
   shrinkray:
-    image: ghcr.io/jesposito/shrinkray:latest
+    image: ghcr.io/noideadeveloper/shrinkray:latest
     container_name: shrinkray
     ports:
       - 8080:8080
@@ -86,7 +85,7 @@ docker run -d \
   -e PGID=100 \
   -v /path/to/config:/config \
   -v /path/to/media:/media \
-  ghcr.io/jesposito/shrinkray:latest
+  ghcr.io/noideadeveloper/shrinkray:latest
 ```
 
 ---
@@ -133,7 +132,7 @@ docker run -d \
   -p 8080:8080 \
   -v /path/to/config:/config \
   -v /path/to/media:/media \
-  ghcr.io/jesposito/shrinkray:latest
+  ghcr.io/noideadeveloper/shrinkray:latest
 ```
 
 Key settings:
@@ -186,73 +185,6 @@ Restrict transcoding to specific hours to reduce system load during the day.
 
 ---
 
-## Authentication
-
-This fork supports optional authentication to protect your Shrinkray instance.
-
-### Password Authentication
-
-```yaml
-auth:
-  enabled: true
-  provider: password
-  secret: "your-random-secret-here"
-  password:
-    hash_algo: auto
-    users:
-      admin: "$2b$12$..." # bcrypt hash
-```
-
-Generate a password hash:
-```bash
-htpasswd -nbB admin yourpassword | cut -d: -f2
-```
-
-### OIDC Authentication
-
-Works with Authentik, Keycloak, Authelia, and other OIDC providers:
-
-```yaml
-auth:
-  enabled: true
-  provider: oidc
-  secret: "your-random-secret-here"
-  oidc:
-    issuer: "https://auth.example.com"
-    client_id: "shrinkray"
-    client_secret: "your-client-secret"
-    redirect_url: "https://shrinkray.example.com/auth/callback"
-    scopes: ["openid", "profile", "email", "groups"]
-    group_claim: "groups"
-    allowed_groups: ["media-admins"]
-```
-
-Configure your IdP with:
-- **Redirect URL:** `https://<your-host>/auth/callback`
-- **Grant type:** Authorization Code
-
-Environment variable overrides are also supported—see [Configuration](#configuration).
-
----
-
-## Notifications
-
-### Pushover
-
-1. Create an app at [pushover.net](https://pushover.net)
-2. Enter your **User Key** and **App Token** in Settings
-3. Check **"Notify when done"** before starting jobs
-
-### ntfy
-
-1. Pick a server (default: `https://ntfy.sh`) and topic
-2. Enter the server, topic, and optional token in Settings
-3. Check **"Notify when done"** before starting jobs
-
-Notifications include job counts and total space saved when the queue empties.
-
----
-
 ## Configuration
 
 Config is stored in `/config/shrinkray.yaml`. Most settings are available in the WebUI.
@@ -270,11 +202,12 @@ Config is stored in `/config/shrinkray.yaml`. Most settings are available in the
 | `schedule_start_hour` | `22` | Hour transcoding may start (0–23) |
 | `schedule_end_hour` | `6` | Hour transcoding must stop (0–23) |
 | `allow_software_fallback` | `false` | Retry failed GPU encodes with CPU |
-| `pushover_user_key` | *(empty)* | Pushover user key |
-| `pushover_app_token` | *(empty)* | Pushover app token |
-| `ntfy_server` | `https://ntfy.sh` | ntfy server URL |
-| `ntfy_topic` | *(empty)* | ntfy topic |
-| `ntfy_token` | *(empty)* | ntfy access token (optional) |
+| `keep_larger_files` | `false` | Keep transcoded output even if larger than source |
+| `hide_processing_tmp` | `false` | Hide `shrinkray.tmp` working files from the file browser |
+| `log_level` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error` |
+| `layout_design` | `split` | UI layout: `split` (side-by-side) or `tabs` |
+| `ffmpeg_path` | `ffmpeg` | Path to ffmpeg binary |
+| `ffprobe_path` | `ffprobe` | Path to ffprobe binary |
 
 ### Environment Variables
 
@@ -283,9 +216,6 @@ All settings can be overridden with environment variables using the `SHRINKRAY_`
 ```bash
 SHRINKRAY_WORKERS=2
 SHRINKRAY_ALLOW_SOFTWARE_FALLBACK=true
-SHRINKRAY_AUTH_ENABLED=1
-SHRINKRAY_AUTH_PROVIDER=password
-SHRINKRAY_AUTH_SECRET=change-me
 ```
 
 ---
@@ -306,14 +236,14 @@ When enabled, failed GPU encodes automatically retry with software encoding.
 ## Building from Source
 
 ```bash
-git clone https://github.com/jesposito/shrinkray.git
+git clone https://github.com/NoIdeaDeveloper/shrinkray.git
 cd shrinkray
 
 go build -o shrinkray ./cmd/shrinkray
 ./shrinkray -media /path/to/media
 ```
 
-**Requirements:** Go 1.22+, FFmpeg with HEVC/AV1 support
+**Requirements:** Go 1.24+, FFmpeg (with HEVC/AV1 support), Node.js 22+ (for E2E tests)
 
 ### Running Tests
 
@@ -322,7 +252,10 @@ go build -o shrinkray ./cmd/shrinkray
 go test ./...
 
 # E2E tests (Playwright)
+# The Shrinkray server must be running on :8080 before tests start.
 npm install && npx playwright install
+go build -o shrinkray ./cmd/shrinkray
+mkdir -p /tmp/test-media
 ./shrinkray -media /tmp/test-media &
 npm test
 ```
@@ -331,7 +264,7 @@ npm test
 
 ## Acknowledgments
 
-This project is built on the excellent work of [@gwlsn](https://github.com/gwlsn) and the original [shrinkray](https://github.com/gwlsn/shrinkray) project. Thank you for creating such a useful tool and making it open source.
+This project is built on the excellent work of [@gwlsn](https://github.com/gwlsn) and the original [shrinkray](https://github.com/gwlsn/shrinkray) project, and the [@jesposito](https://github.com/jesposito) fork which added VAAPI fixes, authentication, and notifications. Thank you for making these tools open source.
 
 Additional contributions from [@akaBilih](https://github.com/akaBilih) for the tabbed layout feature.
 

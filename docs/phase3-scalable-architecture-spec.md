@@ -948,7 +948,6 @@ function renderJobHtml(job) {
 │   - Handle SSE connections                                                   │
 │   - Send initial state on connect                                            │
 │   - Forward events from Queue to connected clients                           │
-│   - Send notifications (Pushover) on queue empty                             │
 │                                                                              │
 │ Does NOT:                                                                    │
 │   - Generate events (Queue does that)                                        │

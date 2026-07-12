@@ -4,6 +4,12 @@
 **Date**: January 4, 2026
 **Commit**: Based on `3602bc0` (latest main)
 
+> **Note**: This audit reflects the codebase as of January 2026, before this fork
+> (`NoIdeaDeveloper/shrinkray`) removed authentication (`internal/auth/`) and
+> outbound notification services (`internal/pushover/`, `internal/ntfy/`). Sections
+> describing those packages are preserved for historical context but no longer
+> apply to the current codebase.
+
 ---
 
 ## Product Promise (Restated)
@@ -549,7 +555,7 @@ docker run -d \
   -e LIBVA_DRIVER_NAME=iHD \
   -v /mnt/user/appdata/shrinkray:/config \
   -v /mnt/user/media:/media \
-  ghcr.io/jesposito/shrinkray:latest
+  ghcr.io/noideadeveloper/shrinkray:latest
 
 # 2. Verify VAAPI works
 docker exec -it shrinkray vainfo

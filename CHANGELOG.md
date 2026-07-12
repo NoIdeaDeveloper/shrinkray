@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Removed
+- Authentication (password and OIDC) — `internal/auth/` package, `golang.org/x/crypto`
+  dependency, and all auth-related config/UI removed. Shrinkray is designed for
+  local-network hosting only.
+- Outbound notification network calls (Pushover and ntfy) — `internal/pushover/` and
+  `internal/ntfy/` packages, related config fields, and Settings UI removed.
+- OIDC provider package (`internal/auth/oidc/`) removed.
+
 ### Fixed
 - VAAPI AV1/HEVC transcode failure with "Impossible to convert between the formats
   supported by the filter 'Parsed_null_0' and the filter 'auto_scale_0'" error.
