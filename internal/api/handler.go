@@ -72,24 +72,21 @@ func (h *Handler) Browse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	processedPaths := h.queue.ProcessedPaths()
-	if len(processedPaths) > 0 {
+	pendingPaths := h.queue.PendingPaths()
+
+	if len(processedPaths) > 0 || len(pendingPaths) > 0 {
 		for _, entry := range result.Entries {
 			if entry.IsDir {
-				entry.ProcessedCount = countProcessedInDir(entry.Path, processedPaths, h.cfg.HideProcessingTmp)
+				if len(processedPaths) > 0 {
+					entry.ProcessedCount = countProcessedInDir(entry.Path, processedPaths, h.cfg.HideProcessingTmp)
+				}
+				if len(pendingPaths) > 0 {
+					entry.Pending = hasPendingInDir(entry.Path, pendingPaths, h.cfg.HideProcessingTmp)
+				}
 				continue
 			}
 			if _, ok := processedPaths[entry.Path]; ok {
 				entry.Processed = true
-			}
-		}
-	}
-
-	pendingPaths := h.queue.PendingPaths()
-	if len(pendingPaths) > 0 {
-		for _, entry := range result.Entries {
-			if entry.IsDir {
-				entry.Pending = hasPendingInDir(entry.Path, pendingPaths, h.cfg.HideProcessingTmp)
-				continue
 			}
 			if _, ok := pendingPaths[entry.Path]; ok {
 				entry.Pending = true

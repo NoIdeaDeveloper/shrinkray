@@ -5567,20 +5567,21 @@
             listEl.innerHTML = sortedJobs.map(job => {
                 const filename = job.input_path.split('/').pop();
                 const safeFilename = escapeHtml(filename);
+                const safeId = escapeHtml(job.id);
                 const badgeClass = job.status === 'no_gain' ? 'no-gain' : 'skipped';
                 const badgeText = job.status === 'no_gain' ? 'No Gain' : 'Skipped';
                 const reason = job.error || 'Unknown reason';
                 return `
-                    <div class="skipped-item" data-job-id="${job.id}">
+                    <div class="skipped-item" data-job-id="${safeId}">
                         <div class="skipped-item-header">
                             <span class="skipped-item-name" title="${escapeHtml(job.input_path)}">${safeFilename}</span>
                             <span class="skipped-item-badge ${badgeClass}">${badgeText}</span>
                         </div>
                         <div class="skipped-item-reason" title="${escapeHtml(reason)}">${escapeHtml(reason)}</div>
                         <div class="skipped-item-actions">
-                            <button class="btn btn-secondary btn-xs" onclick="forceRetryJob('${job.id}')" aria-label="Force transcode this skipped file">Force Transcode</button>
-                            <button class="btn btn-secondary btn-xs" onclick="showPresetPicker('${job.id}')" aria-label="Try a different preset">Different Preset</button>
-                            <button class="btn btn-danger btn-xs" onclick="removeJob('${job.id}')" aria-label="Remove this job">Remove</button>
+                            <button class="btn btn-secondary btn-xs" onclick="forceRetryJob('${safeId}')" aria-label="Force transcode this skipped file">Force Transcode</button>
+                            <button class="btn btn-secondary btn-xs" onclick="showPresetPicker('${safeId}')" aria-label="Try a different preset">Different Preset</button>
+                            <button class="btn btn-danger btn-xs" onclick="removeJob('${safeId}')" aria-label="Remove this job">Remove</button>
                         </div>
                     </div>
                 `;
@@ -5625,17 +5626,18 @@
             listEl.innerHTML = sortedJobs.map(job => {
                 const filename = job.input_path.split('/').pop();
                 const safeFilename = escapeHtml(filename);
+                const safeId = escapeHtml(job.id);
                 const error = job.error || 'Unknown error';
                 return `
-                    <div class="failed-item job-item" data-job-id="${job.id}">
+                    <div class="failed-item job-item" data-job-id="${safeId}">
                         <div class="failed-item-header">
                             <span class="failed-item-name" title="${escapeHtml(job.input_path)}">${safeFilename}</span>
                         </div>
                         <div class="failed-item-error" title="${escapeHtml(error)}">${escapeHtml(error)}</div>
                         ${renderErrorHelper(job)}
                         <div class="failed-item-actions">
-                            <button class="btn btn-secondary btn-xs" onclick="retryJob('${job.id}')" aria-label="Retry this failed job">Retry</button>
-                            <button class="btn btn-danger btn-xs" onclick="removeJob('${job.id}')" aria-label="Remove this job">Remove</button>
+                            <button class="btn btn-secondary btn-xs" onclick="retryJob('${safeId}')" aria-label="Retry this failed job">Retry</button>
+                            <button class="btn btn-danger btn-xs" onclick="removeJob('${safeId}')" aria-label="Remove this job">Remove</button>
                         </div>
                     </div>
                 `;

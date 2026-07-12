@@ -120,7 +120,10 @@ func (q *Queue) load() error {
 	return nil
 }
 
-// save writes the queue to disk (must be called with q.mu held)
+// save writes the queue to disk (must be called with q.mu held).
+// The disk I/O is performed while holding the lock for simplicity and correctness.
+// Most callers invoke this for single-job mutations; batch operations use
+// scheduleSave() for debounced writes.
 func (q *Queue) save() error {
 	if q.filePath == "" {
 		return nil
@@ -152,7 +155,6 @@ func (q *Queue) save() error {
 		TotalSaved:     &totalSaved,
 	}
 
-	// Do the actual I/O (this is still blocking, but data is copied)
 	return q.writeToFile(pd)
 }
 
@@ -766,13 +768,13 @@ func (q *Queue) CompleteJob(id string, outputPath string, outputSize int64) erro
 
 // ProcessedPaths returns a copy of processed input paths.
 func (q *Queue) ProcessedPaths() map[string]struct{} {
-	// Collect paths under lock
-	q.mu.Lock()
+	// Collect paths under read lock
+	q.mu.RLock()
 	allPaths := make([]string, 0, len(q.processedPaths))
 	for path := range q.processedPaths {
 		allPaths = append(allPaths, path)
 	}
-	q.mu.Unlock()
+	q.mu.RUnlock()
 
 	// Check filesystem outside lock to avoid blocking queue operations
 	paths := make(map[string]struct{}, len(allPaths))
@@ -787,7 +789,7 @@ func (q *Queue) ProcessedPaths() map[string]struct{} {
 		paths[path] = struct{}{}
 	}
 
-	// Re-acquire lock to remove stale paths
+	// Re-acquire write lock to remove stale paths
 	if len(stalePaths) > 0 {
 		q.mu.Lock()
 		for _, path := range stalePaths {

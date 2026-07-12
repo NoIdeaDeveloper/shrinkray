@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -303,17 +304,23 @@ func parseDurationValue(value string) (time.Duration, bool) {
 	return time.Duration(seconds * float64(time.Second)), true
 }
 
+var videoExtensions = map[string]bool{
+	".mkv":   true,
+	".mp4":   true,
+	".avi":   true,
+	".mov":   true,
+	".wmv":   true,
+	".flv":   true,
+	".webm":  true,
+	".m4v":   true,
+	".mpeg":  true,
+	".mpg":   true,
+	".m2ts":  true,
+	".ts":    true,
+}
+
 // IsVideoFile returns true if the file extension suggests a video file
 func IsVideoFile(path string) bool {
-	ext := strings.ToLower(path)
-	videoExtensions := []string{
-		".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv",
-		".webm", ".m4v", ".mpeg", ".mpg", ".m2ts", ".ts",
-	}
-	for _, ve := range videoExtensions {
-		if strings.HasSuffix(ext, ve) {
-			return true
-		}
-	}
-	return false
+	ext := strings.ToLower(filepath.Ext(path))
+	return videoExtensions[ext]
 }

@@ -2,6 +2,7 @@ package browse
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 	"path/filepath"
@@ -121,6 +122,10 @@ func (b *Browser) Browse(ctx context.Context, path string) (*BrowseResult, error
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
+	// Limit concurrent directory walks to avoid spawning thousands of goroutines
+	// on large media libraries
+	dirSem := make(chan struct{}, 8)
+
 	for _, e := range entries {
 		// Skip hidden files
 		if strings.HasPrefix(e.Name(), ".") {
@@ -145,9 +150,11 @@ func (b *Browser) Browse(ctx context.Context, path string) (*BrowseResult, error
 		}
 
 		if e.IsDir() {
-			// Count videos in subdirectories asynchronously
+			// Count videos in subdirectories asynchronously with bounded concurrency
+			dirSem <- struct{}{}
 			wg.Add(1)
 			go func(entry *Entry, path string) {
+				defer func() { <-dirSem }()
 				defer wg.Done()
 				count, size := b.countVideos(ctx, path)
 				mu.Lock()
@@ -201,8 +208,9 @@ func (b *Browser) Browse(ctx context.Context, path string) (*BrowseResult, error
 
 // countVideos counts video files in a directory recursively.
 // Respects context cancellation to avoid blocking indefinitely on slow/NFS mounts.
+// Errors from the walk are logged but not returned; context cancellation stops the walk early.
 func (b *Browser) countVideos(ctx context.Context, dirPath string) (count int, totalSize int64) {
-	filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Skip errors
 		}
@@ -232,6 +240,9 @@ func (b *Browser) countVideos(ctx context.Context, dirPath string) (count int, t
 		}
 		return nil
 	})
+	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		log.Printf("[browse] countVideos walk error in %s: %v", dirPath, err)
+	}
 	return count, totalSize
 }
 
@@ -256,9 +267,21 @@ func (b *Browser) getProbeResult(ctx context.Context, path string) *ffmpeg.Probe
 
 	// Cache the result
 	b.cacheMu.Lock()
-	// Evict entire cache if it exceeds the max size to prevent unbounded growth
+	// Evict a portion of the cache if it exceeds the max size to prevent unbounded growth
 	if len(b.cache) >= maxCacheSize {
-		b.cache = make(map[string]*ffmpeg.ProbeResult)
+		// Evict roughly 25% of entries to avoid thrashing on every insert
+		evictCount := len(b.cache) / 4
+		if evictCount < 1 {
+			evictCount = 1
+		}
+		evicted := 0
+		for k := range b.cache {
+			delete(b.cache, k)
+			evicted++
+			if evicted >= evictCount {
+				break
+			}
+		}
 	}
 	b.cache[path] = result
 	b.cacheMu.Unlock()

@@ -466,6 +466,16 @@
         let selectedPaths = new Set();
         let eventSource = null;
 
+        function escapeHtml(str) {
+            if (str == null) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         function log(msg) {
             const debug = document.getElementById('debug');
             const time = new Date().toLocaleTimeString();
@@ -504,9 +514,9 @@
                 const breadcrumb = document.getElementById('breadcrumb');
                 let crumbs = `<a href="#" onclick="browse('')">Home</a>`;
                 if (data.parent) {
-                    crumbs += ` / <a href="#" onclick="browse('${data.parent}')">↑ Up</a>`;
+                    crumbs += ` / <a href="#" onclick="browse('${escapeHtml(data.parent)}')">↑ Up</a>`;
                 }
-                crumbs += ` / ${data.path.split('/').pop() || 'Root'}`;
+                crumbs += ` / ${escapeHtml(data.path.split('/').pop() || 'Root')}`;
                 breadcrumb.innerHTML = crumbs;
 
                 // Update file list
@@ -534,15 +544,17 @@
                     const cls = entry.is_dir ? 'dir' : (entry.video_info ? 'video' : '');
                     const isVideo = !entry.is_dir && entry.video_info;
                     const icon = entry.is_dir ? '📁' : (entry.video_info ? '🎬' : '📄');
+                    const safePath = escapeHtml(entry.path);
+                    const safeName = escapeHtml(entry.name);
 
                     return `<li class="file-item ${cls}"
-                        data-path="${entry.path}"
+                        data-path="${safePath}"
                         data-is-dir="${entry.is_dir}"
                         onclick="handleFileClick(this, event)">
-                        ${isVideo ? `<input type="checkbox" class="file-checkbox" onclick="handleCheckbox(this, event)" data-path="${entry.path}">` : ''}
+                        ${isVideo ? `<input type="checkbox" class="file-checkbox" onclick="handleCheckbox(this, event)" data-path="${safePath}">` : ''}
                         <span class="file-icon">${icon}</span>
-                        <span class="file-name">${entry.name}</span>
-                        <span class="file-meta">${meta}</span>
+                        <span class="file-name">${safeName}</span>
+                        <span class="file-meta">${escapeHtml(meta)}</span>
                     </li>`;
                 }).join('');
 
@@ -654,13 +666,13 @@
 
                 if (data.error) {
                     document.getElementById('estimate-result').innerHTML =
-                        `<div class="warning">${data.error}</div>`;
+                        `<div class="warning">${escapeHtml(data.error)}</div>`;
                     return;
                 }
 
                 const html = `
                     <div class="estimate">
-                        <h3>Estimate: ${data.files.length} file(s) - ${data.preset_name}</h3>
+                        <h3>Estimate: ${data.files.length} file(s) - ${escapeHtml(data.preset_name)}</h3>
                         <div class="estimate-row">
                             <span>Current size:</span>
                             <span>${formatBytes(data.total.current_size)}</span>
@@ -677,7 +689,7 @@
                             <span>Estimated time:</span>
                             <span>${formatDuration(data.total.estimated_time / 1000000000)}</span>
                         </div>
-                        ${data.total.warning ? `<div class="warning">${data.total.warning}</div>` : ''}
+                        ${data.total.warning ? `<div class="warning">${escapeHtml(data.total.warning)}</div>` : ''}
                     </div>
                 `;
                 document.getElementById('estimate-result').innerHTML = html;
@@ -803,10 +815,15 @@
                 const encoderLabel = job.is_hardware ? 'Hardware' : 'Software';
                 const isInitializing = job.status === 'running' && job.progress === 0 && job.speed === 0;
                 const canReorder = job.status === 'pending' || job.status === 'pending_probe';
+                const safeId = escapeHtml(job.id);
+                const safeFilename = escapeHtml(filename);
+                const safePreset = escapeHtml(job.preset_id || '');
+                const safeError = escapeHtml(job.error || '');
+                const safePath = escapeHtml(job.input_path);
                 return `
-                    <div class="job ${canReorder ? 'draggable' : ''}" data-job-id="${job.id}" ${canReorder ? 'draggable="true"' : ''}>
+                    <div class="job ${canReorder ? 'draggable' : ''}" data-job-id="${safeId}" ${canReorder ? 'draggable="true"' : ''}>
                         <div class="job-header">
-                            <span class="job-path" title="${job.input_path}">${filename}</span>
+                            <span class="job-path" title="${safePath}">${safeFilename}</span>
                             <span>
                                 <span class="encoder-badge ${encoderClass}">${encoderLabel}</span>
                                 <span class="job-status ${job.status}">${isInitializing ? 'initializing' : job.status}</span>
@@ -818,27 +835,27 @@
                             </div>
                         ` : ''}
                         <div class="job-details">
-                            <span>Preset: ${job.preset_id}</span>
+                            <span>Preset: ${safePreset}</span>
                             ${job.status === 'running' ? (isInitializing ? `
                                 <span>Starting encoder...</span>
                             ` : `
                                 <span>${job.progress.toFixed(1)}%</span>
                                 <span>Speed: ${job.speed.toFixed(2)}x</span>
-                                <span>ETA: ${job.eta || 'calculating...'}</span>
+                                <span>ETA: ${escapeHtml(job.eta) || 'calculating...'}</span>
                             `) : ''}
                             ${job.status === 'complete' ? `
                                 <span>Saved: ${formatBytes(job.space_saved)}</span>
                                 <span>${formatBytes(job.input_size)} → ${formatBytes(job.output_size)}</span>
                             ` : ''}
-                            ${job.status === 'failed' ? `<span style="color: #ff3b30">${job.error}</span>` : ''}
+                            ${job.status === 'failed' ? `<span style="color: #ff3b30">${safeError}</span>` : ''}
                         </div>
                         ${job.status === 'pending' || job.status === 'pending_probe' || job.status === 'running' ? `
                             <div style="margin-top: 10px; display: flex; gap: 6px;">
                                 ${job.status === 'pending' || job.status === 'pending_probe' ? `
-                                    <button onclick="moveJob('${job.id}', 'up')" style="padding: 5px 8px; font-size: 0.875rem;">↑</button>
-                                    <button onclick="moveJob('${job.id}', 'down')" style="padding: 5px 8px; font-size: 0.875rem;">↓</button>
+                                    <button onclick="moveJob('${safeId}', 'up')" style="padding: 5px 8px; font-size: 0.875rem;">↑</button>
+                                    <button onclick="moveJob('${safeId}', 'down')" style="padding: 5px 8px; font-size: 0.875rem;">↓</button>
                                 ` : ''}
-                                <button onclick="cancelJob('${job.id}')" class="danger" style="padding: 5px 10px; font-size: 0.875rem;">Cancel</button>
+                                <button onclick="cancelJob('${safeId}')" class="danger" style="padding: 5px 10px; font-size: 0.875rem;">Cancel</button>
                             </div>
                         ` : ''}
                     </div>
@@ -1057,7 +1074,7 @@
             const presets = await fetch('/api/presets').then(r => r.json());
             const select = document.getElementById('preset-select');
             select.innerHTML = presets.map(p =>
-                `<option value="${p.id}">${p.name} - ${p.description}</option>`
+                `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)} - ${escapeHtml(p.description)}</option>`
             ).join('');
             log(`Loaded ${presets.length} presets`);
         }

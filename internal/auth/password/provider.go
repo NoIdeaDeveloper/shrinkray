@@ -368,7 +368,10 @@ func (p *Provider) verifyPassword(username, password string) (bool, error) {
 	switch algo {
 	case "bcrypt":
 		if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
-			return false, nil
+			if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+				return false, nil
+			}
+			return false, fmt.Errorf("invalid password hash: %w", err)
 		}
 		return true, nil
 	case "argon2", "argon2id", "argon2i":
@@ -406,26 +409,32 @@ func (p *Provider) sign(payload string) string {
 }
 
 func (p *Provider) verifySession(value string) (string, time.Time, error) {
+	// Session format: username|expiry|signature
+	// Split from the right since the signature (base64) and expiry (digits)
+	// never contain "|", but the username might.
 	parts := strings.Split(value, "|")
-	if len(parts) != 3 {
+	if len(parts) < 3 {
 		return "", time.Time{}, errors.New("invalid session format")
 	}
-	payload := parts[0] + "|" + parts[1]
-	signature, err := base64.RawURLEncoding.DecodeString(parts[2])
+	signature := parts[len(parts)-1]
+	expiryStr := parts[len(parts)-2]
+	username := strings.Join(parts[:len(parts)-2], "|")
+	payload := username + "|" + expiryStr
+	signatureBytes, err := base64.RawURLEncoding.DecodeString(signature)
 	if err != nil {
 		return "", time.Time{}, errors.New("invalid session signature")
 	}
 	expected := hmac.New(sha256.New, p.secret)
 	expected.Write([]byte(payload))
 	expectedSum := expected.Sum(nil)
-	if subtle.ConstantTimeCompare(signature, expectedSum) != 1 {
+	if subtle.ConstantTimeCompare(signatureBytes, expectedSum) != 1 {
 		return "", time.Time{}, errors.New("invalid session signature")
 	}
-	expiryUnix, err := strconv.ParseInt(parts[1], 10, 64)
+	expiryUnix, err := strconv.ParseInt(expiryStr, 10, 64)
 	if err != nil {
 		return "", time.Time{}, errors.New("invalid session expiry")
 	}
-	return parts[0], time.Unix(expiryUnix, 0), nil
+	return username, time.Unix(expiryUnix, 0), nil
 }
 
 func readCredentials(r *http.Request) (string, string, error) {
