@@ -1,19 +1,19 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>Shrinkray</Name>
-  <Repository>ghcr.io/gwlsn/shrinkray:latest</Repository>
-  <Registry>https://github.com/gwlsn/shrinkray/pkgs/container/shrinkray</Registry>
+  <Repository>ghcr.io/noideadeveloper/shrinkray:latest</Repository>
+  <Registry>https://github.com/NoIdeaDeveloper/shrinkray/pkgs/container/shrinkray</Registry>
   <Branch>
     <Tag>latest</Tag>
     <TagDescription>Latest stable release</TagDescription>
   </Branch>
   <Network>bridge</Network>
   <Privileged>false</Privileged>
-  <Support>https://github.com/gwlsn/shrinkray/issues</Support>
-  <Project>https://github.com/gwlsn/shrinkray</Project>
+  <Support>https://github.com/NoIdeaDeveloper/shrinkray/issues</Support>
+  <Project>https://github.com/NoIdeaDeveloper/shrinkray</Project>
   <Overview>A simple video transcoding tool for Unraid. Select a folder, pick a preset, and shrink your media library with hardware-accelerated HEVC/AV1 encoding.</Overview>
   <Category>MediaApp:Video</Category>
-  <Icon>https://raw.githubusercontent.com/gwlsn/shrinkray/main/web/templates/logo.png</Icon>
+  <Icon>https://raw.githubusercontent.com/NoIdeaDeveloper/shrinkray/main/web/templates/logo.png</Icon>
   <WebUI>http://[IP]:[PORT:8080]</WebUI>
   <ExtraSearchTerms>transcode ffmpeg compression video hevc av1 shrink encode</ExtraSearchTerms>
   <Beta>false</Beta>
