@@ -615,6 +615,8 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 		"schedule_start_hour":     h.cfg.ScheduleStartHour,
 		"schedule_end_hour":       h.cfg.ScheduleEndHour,
 		"keep_larger_files":       h.cfg.KeepLargerFiles,
+		"enable_quality_check":    h.cfg.EnableQualityCheck,
+		"quality_threshold":       h.cfg.QualityThreshold,
 		"layout_design":           h.cfg.LayoutDesign,
 		// Feature flags for frontend
 		"features": map[string]bool{
@@ -639,6 +641,8 @@ type UpdateConfigRequest struct {
 	ScheduleStartHour     *int    `json:"schedule_start_hour,omitempty"`
 	ScheduleEndHour       *int    `json:"schedule_end_hour,omitempty"`
 	KeepLargerFiles       *bool   `json:"keep_larger_files,omitempty"`
+	EnableQualityCheck    *bool   `json:"enable_quality_check,omitempty"`
+	QualityThreshold      *float64 `json:"quality_threshold,omitempty"`
 	LayoutDesign          *string `json:"layout_design,omitempty"`
 }
 
@@ -710,6 +714,15 @@ func (h *Handler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.KeepLargerFiles != nil {
 		h.cfg.KeepLargerFiles = *req.KeepLargerFiles
+	}
+	if req.EnableQualityCheck != nil {
+		h.cfg.EnableQualityCheck = *req.EnableQualityCheck
+	}
+	if req.QualityThreshold != nil {
+		threshold := *req.QualityThreshold
+		if threshold >= 0 && threshold <= 100 {
+			h.cfg.QualityThreshold = threshold
+		}
 	}
 	if req.LayoutDesign != nil {
 		if *req.LayoutDesign != "split" && *req.LayoutDesign != "tabs" {
@@ -831,8 +844,8 @@ func (h *Handler) ForceRetryJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if job.Status != jobs.StatusSkipped && job.Status != jobs.StatusNoGain {
-		writeError(w, http.StatusBadRequest, "can only force retry skipped or no_gain jobs")
+	if job.Status != jobs.StatusSkipped && job.Status != jobs.StatusNoGain && job.Status != jobs.StatusLowQuality {
+		writeError(w, http.StatusBadRequest, "can only force retry skipped, no_gain, or low_quality jobs")
 		return
 	}
 
@@ -884,8 +897,8 @@ func (h *Handler) RetryWithPreset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if job.Status != jobs.StatusSkipped && job.Status != jobs.StatusNoGain {
-		writeError(w, http.StatusBadRequest, "can only retry skipped or no_gain jobs with a different preset")
+	if job.Status != jobs.StatusSkipped && job.Status != jobs.StatusNoGain && job.Status != jobs.StatusLowQuality {
+		writeError(w, http.StatusBadRequest, "can only retry skipped, no_gain, or low_quality jobs with a different preset")
 		return
 	}
 

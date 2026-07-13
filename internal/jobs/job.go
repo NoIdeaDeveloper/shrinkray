@@ -14,8 +14,9 @@ const (
 	StatusComplete     Status = "complete"
 	StatusFailed       Status = "failed"
 	StatusCancelled    Status = "cancelled"
-	StatusSkipped      Status = "skipped"  // File already in target format or meets criteria
-	StatusNoGain       Status = "no_gain"  // Transcoded file was larger than original
+	StatusSkipped      Status = "skipped"      // File already in target format or meets criteria
+	StatusNoGain       Status = "no_gain"      // Transcoded file was larger than original
+	StatusLowQuality   Status = "low_quality" // Transcoded file quality (VMAF) was below threshold
 )
 
 // Job represents a transcoding job
@@ -64,7 +65,7 @@ type Job struct {
 // IsTerminal returns true if the job is in a terminal state
 func (j *Job) IsTerminal() bool {
 	return j.Status == StatusComplete || j.Status == StatusFailed || j.Status == StatusCancelled ||
-		j.Status == StatusSkipped || j.Status == StatusNoGain
+		j.Status == StatusSkipped || j.Status == StatusNoGain || j.Status == StatusLowQuality
 }
 
 // IsWorkable returns true if the job can be picked up by a worker
@@ -79,7 +80,7 @@ func (j *Job) NeedsProbe() bool {
 
 // JobEvent represents an event for SSE streaming
 type JobEvent struct {
-	Type string `json:"type"` // "added", "batch_added", "probed", "started", "progress", "complete", "failed", "cancelled", "removed", "skipped", "no_gain"
+	Type string `json:"type"` // "added", "batch_added", "probed", "started", "progress", "complete", "failed", "cancelled", "removed", "skipped", "no_gain", "low_quality"
 	Job  *Job   `json:"job,omitempty"`
 
 	// Batch of jobs - used for "batch_added" event to reduce SSE event flood

@@ -30,10 +30,10 @@ type Worker struct {
 	wg     sync.WaitGroup
 
 	// Currently running job (for cancellation)
-	currentJobMu   sync.Mutex
-	currentJob     *Job
-	jobCancel      context.CancelFunc
-	requeueOnStop  bool // when true, processJob requeues instead of cancelling
+	currentJobMu  sync.Mutex
+	currentJob    *Job
+	jobCancel     context.CancelFunc
+	requeueOnStop bool // when true, processJob requeues instead of cancelling
 }
 
 // WorkerPool manages multiple workers
@@ -509,6 +509,23 @@ func (w *Worker) processJob(job *Job) {
 		w.queue.NoGainJob(job.ID, fmt.Sprintf("Transcoded file (%s) is larger than original (%s). File skipped.",
 			formatBytes(result.OutputSize), formatBytes(job.InputSize)))
 		return
+	}
+
+	// Quality check: compute VMAF score between transcoded (distorted) and original (reference).
+	// If the score is below the configured threshold, discard the transcoded file.
+	if w.cfg.EnableQualityCheck && !job.ForceTranscode {
+		vmafCtx, vmafCancel := context.WithTimeout(jobCtx, 10*time.Minute)
+		defer vmafCancel()
+
+		score, err := w.transcoder.VMAFScore(vmafCtx, tempPath, job.InputPath)
+		if err != nil {
+			log.Printf("[worker] VMAF check failed for job %s: %v - proceeding with transcode", job.ID, err)
+		} else if score < w.cfg.QualityThreshold {
+			os.Remove(tempPath)
+			w.queue.LowQualityJob(job.ID, fmt.Sprintf("Transcoded file VMAF score (%.2f) is below threshold (%.2f). File skipped.",
+				score, w.cfg.QualityThreshold))
+			return
+		}
 	}
 
 	// Finalize the transcode (handle original file)

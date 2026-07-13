@@ -519,3 +519,150 @@ func TestFailJobWithFallbackReason(t *testing.T) {
 		t.Errorf("unexpected FallbackReason: %s", failedJob.FallbackReason)
 	}
 }
+
+func TestLowQualityJob(t *testing.T) {
+	queue, _ := NewQueue("")
+
+	probe := &ffmpeg.ProbeResult{
+		Path:     "/media/video.mkv",
+		Size:     1000000,
+		Duration: 10 * time.Second,
+	}
+
+	job, _ := queue.Add(probe.Path, "compress", probe)
+	queue.StartJob(job.ID, "/tmp/temp.mkv", "cpu→cpu")
+
+	reason := "Transcoded file VMAF score (85.30) is below threshold (90.00). File skipped."
+	err := queue.LowQualityJob(job.ID, reason)
+	if err != nil {
+		t.Fatalf("LowQualityJob failed: %v", err)
+	}
+
+	got := queue.Get(job.ID)
+	if got.Status != StatusLowQuality {
+		t.Errorf("expected status low_quality, got %s", got.Status)
+	}
+
+	if got.Error != reason {
+		t.Errorf("expected error %q, got %q", reason, got.Error)
+	}
+
+	if got.TempPath != "" {
+		t.Errorf("expected TempPath to be cleared, got %q", got.TempPath)
+	}
+
+	if got.CompletedAt.IsZero() {
+		t.Error("expected CompletedAt to be set")
+	}
+
+	if !got.IsTerminal() {
+		t.Error("expected low_quality to be a terminal status")
+	}
+}
+
+func TestLowQualityJobNotFound(t *testing.T) {
+	queue, _ := NewQueue("")
+
+	err := queue.LowQualityJob("nonexistent-id", "test reason")
+	if err == nil {
+		t.Error("expected error for nonexistent job, got nil")
+	}
+}
+
+func TestLowQualityJobAlreadyTerminal(t *testing.T) {
+	queue, _ := NewQueue("")
+
+	probe := &ffmpeg.ProbeResult{
+		Path:     "/media/video.mkv",
+		Size:     1000000,
+		Duration: 10 * time.Second,
+	}
+
+	job, _ := queue.Add(probe.Path, "compress", probe)
+	queue.StartJob(job.ID, "/tmp/temp.mkv", "cpu→cpu")
+
+	// Complete the job first
+	queue.CompleteJob(job.ID, "/media/video.mkv", 500000)
+
+	// Now try to mark it as low_quality - should fail
+	err := queue.LowQualityJob(job.ID, "test reason")
+	if err == nil {
+		t.Error("expected error when marking completed job as low_quality, got nil")
+	}
+}
+
+func TestForceRetryLowQualityJob(t *testing.T) {
+	queue, _ := NewQueue("")
+
+	probe := &ffmpeg.ProbeResult{
+		Path:     "/media/video.mkv",
+		Size:     1000000,
+		Duration: 10 * time.Second,
+	}
+
+	job, _ := queue.Add(probe.Path, "compress", probe)
+	queue.StartJob(job.ID, "/tmp/temp.mkv", "cpu→cpu")
+	queue.LowQualityJob(job.ID, "VMAF score too low")
+
+	// Should be able to force retry a low_quality job
+	err := queue.ForceRetryJob(job.ID)
+	if err != nil {
+		t.Fatalf("ForceRetryJob failed for low_quality job: %v", err)
+	}
+
+	got := queue.Get(job.ID)
+	if got.Status != StatusPending {
+		t.Errorf("expected status pending after force retry, got %s", got.Status)
+	}
+
+	if !got.ForceTranscode {
+		t.Error("expected ForceTranscode to be true after force retry")
+	}
+}
+
+func TestQueueStatsWithLowQuality(t *testing.T) {
+	queue, _ := NewQueue("")
+
+	probe := &ffmpeg.ProbeResult{
+		Path:     "/media/video.mkv",
+		Size:     1000000,
+		Duration: 10 * time.Second,
+	}
+
+	// Add jobs in various states
+	job1, _ := queue.Add("/media/v1.mkv", "compress", probe)
+	job2, _ := queue.Add("/media/v2.mkv", "compress", probe)
+	queue.Add("/media/v3.mkv", "compress", probe)
+
+	// Complete job1
+	queue.StartJob(job1.ID, "/tmp/temp1.mkv", "cpu→cpu")
+	queue.CompleteJob(job1.ID, "/media/v1.mkv", 500000)
+
+	// Mark job2 as low_quality
+	queue.StartJob(job2.ID, "/tmp/temp2.mkv", "cpu→cpu")
+	queue.LowQualityJob(job2.ID, "VMAF score too low")
+
+	stats := queue.Stats()
+
+	if stats.Total != 3 {
+		t.Errorf("expected total 3, got %d", stats.Total)
+	}
+
+	if stats.Complete != 1 {
+		t.Errorf("expected complete 1, got %d", stats.Complete)
+	}
+
+	if stats.LowQuality != 1 {
+		t.Errorf("expected low_quality 1, got %d", stats.LowQuality)
+	}
+
+	if stats.Pending != 1 {
+		t.Errorf("expected pending 1, got %d", stats.Pending)
+	}
+
+	if stats.TotalSaved != 500000 {
+		t.Errorf("expected total saved 500000, got %d", stats.TotalSaved)
+	}
+
+	t.Logf("Queue stats with low_quality: %+v", stats)
+}

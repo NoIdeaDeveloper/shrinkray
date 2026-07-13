@@ -2254,6 +2254,11 @@
             color: #92400e;
         }
 
+        .skipped-item-badge.low-quality {
+            background: rgba(249, 115, 22, 0.2);
+            color: #c2410c;
+        }
+
         /* Failed Section Styles */
         .failed-section {
             border-top: 1px solid var(--border);
@@ -2950,6 +2955,29 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-name">Quality Check (VMAF)</div>
+                                <div class="setting-desc">Discard transcodes below a quality threshold</div>
+                            </div>
+                            <div class="setting-control">
+                                <label class="setting-checkbox-label">
+                                    <input type="checkbox" id="setting-enable-quality-check" onchange="toggleEnableQualityCheck(this.checked)" aria-label="Enable VMAF quality check">
+                                </label>
+                            </div>
+                        </div>
+                        <div class="setting-item setting-item-stacked" id="quality-threshold-row">
+                            <div class="setting-info">
+                                <div class="setting-name">VMAF Threshold</div>
+                                <div class="setting-desc">0-100, higher = stricter. Default 90</div>
+                            </div>
+                            <div class="setting-control">
+                                <div class="setting-slider-row">
+                                    <input type="range" class="setting-slider" id="setting-quality-threshold" min="0" max="100" step="1" value="90" oninput="syncQualityThresholdInput(this.value)" onchange="updateSetting('quality_threshold', parseFloat(this.value))">
+                                    <input type="number" class="setting-slider-value" id="setting-quality-threshold-input" min="0" max="100" step="1" value="90" onchange="syncQualityThresholdSlider(this.value); updateSetting('quality_threshold', parseFloat(this.value))" aria-label="VMAF threshold value">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -3158,7 +3186,7 @@
         const SECTION_UPDATE_DEBOUNCE_MS = 50; // Batch section updates within 50ms
 
         // Performance: Track stats locally to avoid fetching on every update
-        let cachedStats = { pending: 0, pending_probe: 0, running: 0, complete: 0, failed: 0, skipped: 0, no_gain: 0, total_saved: 0 };
+        let cachedStats = { pending: 0, pending_probe: 0, running: 0, complete: 0, failed: 0, skipped: 0, no_gain: 0, low_quality: 0, total_saved: 0 };
 
         // Feature flags (loaded from server config)
         let featureFlags = {
@@ -3183,7 +3211,8 @@
             failed: new Set(),
             cancelled: new Set(),
             skipped: new Set(),
-            no_gain: new Set()
+            no_gain: new Set(),
+            low_quality: new Set()
         };
 
         // Virtual scroll configuration
@@ -4624,6 +4653,10 @@
                 return 'File already optimized (no space saved)';
             }
 
+            if (job.status === 'low_quality') {
+                return 'Skipped: quality below threshold';
+            }
+
             if (job.status === 'skipped') {
                 return 'Skipped: already in target format';
             }
@@ -4925,7 +4958,7 @@
                 sectionUpdateTimers.skipped = null;
                 if (sectionUpdatePending.skipped) {
                     sectionUpdatePending.skipped = false;
-                    const skippedJobs = cachedJobs.filter(j => j.status === 'skipped' || j.status === 'no_gain');
+                    const skippedJobs = cachedJobs.filter(j => j.status === 'skipped' || j.status === 'no_gain' || j.status === 'low_quality');
                     updateSkippedSection(skippedJobs);
                 }
             }, SECTION_UPDATE_DEBOUNCE_MS);
@@ -5177,7 +5210,7 @@
                 // Section update is handled by debounced call in SSE handler
             }
             // If job failed/skipped/no_gain, remove from queue (they have their own sections)
-            else if (job.status === 'failed' || job.status === 'skipped' || job.status === 'no_gain') {
+            else if (job.status === 'failed' || job.status === 'skipped' || job.status === 'no_gain' || job.status === 'low_quality') {
                 // Remove from main queue list
                 const safeId = escapeCssSelector(job.id);
                 const el = document.querySelector(`#queue-list .job-item[data-job-id="${safeId}"]`);
@@ -5273,10 +5306,10 @@
 
             // Separate jobs by status for different sections
             const completedJobs = cachedJobs.filter(j => j.status === 'complete');
-            const skippedJobs = cachedJobs.filter(j => j.status === 'skipped' || j.status === 'no_gain');
+            const skippedJobs = cachedJobs.filter(j => j.status === 'skipped' || j.status === 'no_gain' || j.status === 'low_quality');
             const failedJobs = cachedJobs.filter(j => j.status === 'failed');
             // Queue shows pending jobs (not running - those are in Active panel)
-            // Excludes: complete, skipped, no_gain, failed, running
+            // Excludes: complete, skipped, no_gain, low_quality, failed, running
             const queueJobs = cachedJobs.filter(j =>
                 j.status === 'pending' ||
                 j.status === 'pending_probe' ||
@@ -5287,6 +5320,7 @@
                 j.status !== 'complete' &&
                 j.status !== 'skipped' &&
                 j.status !== 'no_gain' &&
+                j.status !== 'low_quality' &&
                 j.status !== 'failed'
             );
 
@@ -5563,8 +5597,8 @@
                 const filename = job.input_path.split('/').pop();
                 const safeFilename = escapeHtml(filename);
                 const safeId = escapeHtml(job.id);
-                const badgeClass = job.status === 'no_gain' ? 'no-gain' : 'skipped';
-                const badgeText = job.status === 'no_gain' ? 'No Gain' : 'Skipped';
+                const badgeClass = job.status === 'no_gain' ? 'no-gain' : (job.status === 'low_quality' ? 'low-quality' : 'skipped');
+                const badgeText = job.status === 'no_gain' ? 'No Gain' : (job.status === 'low_quality' ? 'Low Quality' : 'Skipped');
                 const reason = job.error || 'Unknown reason';
                 return `
                     <div class="skipped-item" data-job-id="${safeId}">
@@ -6076,7 +6110,7 @@
                     handleJobStatusChange(data.job);
                 } else if (data.type === 'removed' && data.job) {
                     handleJobRemoved(data.job);
-                } else if ((data.type === 'started' || data.type === 'complete' || data.type === 'failed' || data.type === 'cancelled' || data.type === 'skipped' || data.type === 'no_gain') && data.job) {
+                } else if ((data.type === 'started' || data.type === 'complete' || data.type === 'failed' || data.type === 'cancelled' || data.type === 'skipped' || data.type === 'no_gain' || data.type === 'low_quality') && data.job) {
                     // Performance: Update single job instead of full refresh
                     handleJobStatusChange(data.job);
 
@@ -6095,7 +6129,7 @@
                         browse(currentPath, true, { updateHistory: false });
                     }
                     // Update sections for terminal states (debounced to avoid DOM thrashing)
-                    if (data.type === 'skipped' || data.type === 'no_gain') {
+                    if (data.type === 'skipped' || data.type === 'no_gain' || data.type === 'low_quality') {
                         debouncedUpdateSkippedSection();
                     }
                     if (data.type === 'failed') {
@@ -6491,6 +6525,14 @@
                 document.getElementById('setting-quality-av1').value = av1Quality;
                 document.getElementById('setting-quality-av1-input').value = av1Quality;
 
+                // VMAF quality check settings
+                const enableQualityCheck = config.enable_quality_check || false;
+                const qualityThreshold = config.quality_threshold ?? 90;
+                document.getElementById('setting-enable-quality-check').checked = enableQualityCheck;
+                document.getElementById('setting-quality-threshold').value = qualityThreshold;
+                document.getElementById('setting-quality-threshold-input').value = qualityThreshold;
+                updateQualityThresholdVisibility(enableQualityCheck);
+
                 // Unicorn Mode (stored locally)
                 const unicornEnabled = localStorage.getItem('shrinkray-unicorn') === 'true';
                 document.getElementById('setting-unicorn-mode').checked = unicornEnabled;
@@ -6556,6 +6598,30 @@
 
         async function toggleAllowSoftwareFallback(enabled) {
             await updateSetting('allow_software_fallback', enabled);
+        }
+
+        async function toggleEnableQualityCheck(enabled) {
+            const updated = await updateSetting('enable_quality_check', enabled);
+            if (updated) {
+                updateQualityThresholdVisibility(enabled);
+            } else {
+                document.getElementById('setting-enable-quality-check').checked = !enabled;
+            }
+        }
+
+        function updateQualityThresholdVisibility(enabled) {
+            const row = document.getElementById('quality-threshold-row');
+            if (row) {
+                row.style.display = enabled ? '' : 'none';
+            }
+        }
+
+        function syncQualityThresholdInput(value) {
+            document.getElementById('setting-quality-threshold-input').value = value;
+        }
+
+        function syncQualityThresholdSlider(value) {
+            document.getElementById('setting-quality-threshold').value = value;
         }
 
         async function clearProcessedHistory() {

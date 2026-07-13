@@ -102,6 +102,16 @@ type Config struct {
 	// Useful for users who want codec consistency across their library
 	KeepLargerFiles bool `yaml:"keep_larger_files"`
 
+	// EnableQualityCheck enables VMAF-based quality comparison after transcode.
+	// If the transcoded file's VMAF score is below QualityThreshold, it is discarded
+	// and the job is marked as low_quality. Default: false (disabled).
+	EnableQualityCheck bool `yaml:"enable_quality_check"`
+
+	// QualityThreshold is the minimum VMAF score (0-100) acceptable for a transcoded file.
+	// Higher = stricter quality requirement. Default: 90 (near-transparent).
+	// Only used when EnableQualityCheck is true.
+	QualityThreshold float64 `yaml:"quality_threshold"`
+
 	// LogLevel controls logging verbosity: debug, info, warn, error (default: info)
 	LogLevel string `yaml:"log_level"`
 
@@ -130,6 +140,8 @@ func DefaultConfig() *Config {
 		ScheduleStartHour: 22,
 		ScheduleEndHour:   6,
 		KeepLargerFiles:   false,
+		EnableQualityCheck: false,
+		QualityThreshold:   90.0,
 		LogLevel:          "info",
 		LayoutDesign:      "split",
 		Features:          DefaultFeatureFlags(),

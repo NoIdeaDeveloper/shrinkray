@@ -1019,6 +1019,34 @@ func (q *Queue) NoGainJob(id string, reason string) error {
 	return nil
 }
 
+// LowQualityJob marks a job as low_quality (transcoded file's VMAF score was below threshold)
+func (q *Queue) LowQualityJob(id string, reason string) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	job, ok := q.jobs[id]
+	if !ok {
+		return fmt.Errorf("job not found: %s", id)
+	}
+
+	if job.IsTerminal() && job.Status != StatusLowQuality {
+		return fmt.Errorf("job already in terminal state: %s", job.Status)
+	}
+
+	job.Status = StatusLowQuality
+	job.Error = reason
+	job.CompletedAt = time.Now()
+	job.TempPath = ""
+
+	if err := q.save(); err != nil {
+		log.Printf("[queue] Warning: failed to persist queue: %v", err)
+	}
+
+	q.broadcast(JobEvent{Type: "low_quality", Job: job})
+
+	return nil
+}
+
 // ForceRetryJob resets a skipped or no_gain job to pending with ForceTranscode enabled.
 // This bypasses skip checks and size comparison on retry.
 func (q *Queue) ForceRetryJob(id string) error {
@@ -1030,8 +1058,8 @@ func (q *Queue) ForceRetryJob(id string) error {
 		return fmt.Errorf("job not found: %s", id)
 	}
 
-	if job.Status != StatusSkipped && job.Status != StatusNoGain {
-		return fmt.Errorf("can only force retry skipped or no_gain jobs, got: %s", job.Status)
+	if job.Status != StatusSkipped && job.Status != StatusNoGain && job.Status != StatusLowQuality {
+		return fmt.Errorf("can only force retry skipped, no_gain, or low_quality jobs, got: %s", job.Status)
 	}
 
 	// Reset job state
@@ -1394,6 +1422,7 @@ type Stats struct {
 	Cancelled    int   `json:"cancelled"`
 	Skipped      int   `json:"skipped"`
 	NoGain       int   `json:"no_gain"`
+	LowQuality   int   `json:"low_quality"`
 	Total        int   `json:"total"`
 	TotalSaved   int64 `json:"total_saved"` // Total bytes saved by completed jobs
 }
@@ -1422,6 +1451,8 @@ func (q *Queue) Stats() Stats {
 			stats.Skipped++
 		case StatusNoGain:
 			stats.NoGain++
+		case StatusLowQuality:
+			stats.LowQuality++
 		}
 	}
 	stats.TotalSaved = q.totalSaved
