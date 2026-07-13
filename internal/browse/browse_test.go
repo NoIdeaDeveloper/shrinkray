@@ -152,6 +152,148 @@ func TestBrowserSecurity(t *testing.T) {
 	}
 }
 
+func TestDirCountCache(t *testing.T) {
+	tmpDir := t.TempDir()
+	if resolved, err := filepath.EvalSymlinks(tmpDir); err == nil {
+		tmpDir = resolved
+	}
+
+	// Create directory structure with video files
+	subDir := filepath.Join(tmpDir, "Movies")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatalf("failed to create dir: %v", err)
+	}
+
+	videoFiles := []string{
+		filepath.Join(subDir, "movie1.mkv"),
+		filepath.Join(subDir, "movie2.mp4"),
+		filepath.Join(subDir, "movie3.mkv"),
+	}
+	for _, f := range videoFiles {
+		if err := os.WriteFile(f, []byte("fake content"), 0644); err != nil {
+			t.Fatalf("failed to create file: %v", err)
+		}
+	}
+
+	// Also create a non-video file
+	if err := os.WriteFile(filepath.Join(subDir, "readme.txt"), []byte("txt"), 0644); err != nil {
+		t.Fatalf("failed to create txt: %v", err)
+	}
+
+	prober := ffmpeg.NewProber("ffprobe")
+	browser := NewBrowser(prober, tmpDir)
+	ctx := context.Background()
+
+	// First browse - should walk and cache
+	result, err := browser.Browse(ctx, tmpDir)
+	if err != nil {
+		t.Fatalf("first Browse failed: %v", err)
+	}
+
+	var dirEntry *Entry
+	for _, e := range result.Entries {
+		if e.IsDir && e.Name == "Movies" {
+			dirEntry = e
+			break
+		}
+	}
+	if dirEntry == nil {
+		t.Fatal("Movies directory not found in browse result")
+	}
+
+	if dirEntry.FileCount != 3 {
+		t.Errorf("expected file count 3, got %d", dirEntry.FileCount)
+	}
+
+	// Verify cache was populated
+	browser.dirCountCacheMu.RLock()
+	cached, ok := browser.dirCountCache[subDir]
+	browser.dirCountCacheMu.RUnlock()
+	if !ok {
+		t.Fatal("expected dir count cache to be populated")
+	}
+	if cached.count != 3 {
+		t.Errorf("expected cached count 3, got %d", cached.count)
+	}
+
+	// Second browse - should use cache (return instantly)
+	result2, err := browser.Browse(ctx, tmpDir)
+	if err != nil {
+		t.Fatalf("second Browse failed: %v", err)
+	}
+
+	for _, e := range result2.Entries {
+		if e.IsDir && e.Name == "Movies" {
+			if e.FileCount != 3 {
+				t.Errorf("expected cached file count 3, got %d", e.FileCount)
+			}
+			break
+		}
+	}
+
+	// Add a new video file
+	if err := os.WriteFile(filepath.Join(subDir, "movie4.mkv"), []byte("fake content"), 0644); err != nil {
+		t.Fatalf("failed to add file: %v", err)
+	}
+
+	// InvalidateCache for the parent should force re-walk
+	browser.InvalidateCache(filepath.Join(subDir, "movie4.mkv"))
+
+	// Third browse - should re-walk and find 4 videos now
+	result3, err := browser.Browse(ctx, tmpDir)
+	if err != nil {
+		t.Fatalf("third Browse failed: %v", err)
+	}
+
+	for _, e := range result3.Entries {
+		if e.IsDir && e.Name == "Movies" {
+			if e.FileCount != 4 {
+				t.Errorf("expected refreshed file count 4, got %d", e.FileCount)
+			}
+			break
+		}
+	}
+}
+
+func TestClearCacheClearsDirCountCache(t *testing.T) {
+	tmpDir := t.TempDir()
+	if resolved, err := filepath.EvalSymlinks(tmpDir); err == nil {
+		tmpDir = resolved
+	}
+
+	subDir := filepath.Join(tmpDir, "Sub")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatalf("failed to create dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(subDir, "vid.mkv"), []byte("x"), 0644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+
+	prober := ffmpeg.NewProber("ffprobe")
+	browser := NewBrowser(prober, tmpDir)
+	ctx := context.Background()
+
+	// Populate cache
+	browser.Browse(ctx, tmpDir)
+
+	browser.dirCountCacheMu.RLock()
+	_, ok := browser.dirCountCache[subDir]
+	browser.dirCountCacheMu.RUnlock()
+	if !ok {
+		t.Fatal("expected dir count cache entry")
+	}
+
+	// ClearCache should clear it
+	browser.ClearCache()
+
+	browser.dirCountCacheMu.RLock()
+	_, ok = browser.dirCountCache[subDir]
+	browser.dirCountCacheMu.RUnlock()
+	if ok {
+		t.Error("expected dir count cache to be cleared")
+	}
+}
+
 func TestGetVideoFiles(t *testing.T) {
 	// Use the real test file
 	testFile := filepath.Join("..", "..", "testdata", "test_x264.mkv")
@@ -264,11 +406,11 @@ func TestDiscoverMediaFiles(t *testing.T) {
 
 	// Create test files
 	files := map[string]string{
-		filepath.Join(tmpDir, "a.mp4"):   "video",
-		filepath.Join(tmpDir, "b.txt"):   "text",
-		filepath.Join(sub1, "c.mkv"):     "video",
-		filepath.Join(sub2, "d.mp4"):     "video",
-		filepath.Join(hidden, "e.mp4"):   "video in hidden dir",
+		filepath.Join(tmpDir, "a.mp4"): "video",
+		filepath.Join(tmpDir, "b.txt"): "text",
+		filepath.Join(sub1, "c.mkv"):   "video",
+		filepath.Join(sub2, "d.mp4"):   "video",
+		filepath.Join(hidden, "e.mp4"): "video in hidden dir",
 	}
 
 	for path, content := range files {

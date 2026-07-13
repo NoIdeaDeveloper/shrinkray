@@ -39,6 +39,17 @@ type BrowseResult struct {
 	TotalSize  int64    `json:"total_size"`  // Total size of video files
 }
 
+// dirCountTTL is how long cached directory video counts remain valid.
+// Subsequent browses within this window return instantly without re-walking.
+const dirCountTTL = 5 * time.Minute
+
+// dirCountEntry caches the video count and total size for a directory.
+type dirCountEntry struct {
+	count     int
+	totalSize int64
+	cachedAt  time.Time
+}
+
 // Browser handles file system browsing with video metadata
 type Browser struct {
 	prober            *ffmpeg.Prober
@@ -49,14 +60,19 @@ type Browser struct {
 	// Cache for probe results (path -> result)
 	cacheMu sync.RWMutex
 	cache   map[string]*ffmpeg.ProbeResult
+
+	// Cache for directory video counts (dir path -> count/size)
+	dirCountCacheMu sync.RWMutex
+	dirCountCache   map[string]dirCountEntry
 }
 
 // NewBrowser creates a new Browser with the given prober and media root
 func NewBrowser(prober *ffmpeg.Prober, mediaRoot string) *Browser {
 	return &Browser{
-		prober:    prober,
-		mediaRoot: normalizeMediaRoot(mediaRoot),
-		cache:     make(map[string]*ffmpeg.ProbeResult),
+		prober:        prober,
+		mediaRoot:     normalizeMediaRoot(mediaRoot),
+		cache:         make(map[string]*ffmpeg.ProbeResult),
+		dirCountCache: make(map[string]dirCountEntry),
 	}
 }
 
@@ -223,6 +239,16 @@ func (b *Browser) Browse(ctx context.Context, path string) (*BrowseResult, error
 // Respects context cancellation to avoid blocking indefinitely on slow/NFS mounts.
 // Errors from the walk are logged but not returned; context cancellation stops the walk early.
 func (b *Browser) countVideos(ctx context.Context, dirPath string) (count int, totalSize int64) {
+	// Check cache first to avoid expensive recursive walks on every page refresh
+	b.dirCountCacheMu.RLock()
+	if entry, ok := b.dirCountCache[dirPath]; ok {
+		if time.Since(entry.cachedAt) < dirCountTTL {
+			b.dirCountCacheMu.RUnlock()
+			return entry.count, entry.totalSize
+		}
+	}
+	b.dirCountCacheMu.RUnlock()
+
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Skip errors
@@ -256,6 +282,16 @@ func (b *Browser) countVideos(ctx context.Context, dirPath string) (count int, t
 	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 		log.Printf("[browse] countVideos walk error in %s: %v", dirPath, err)
 	}
+
+	// Cache the result for subsequent browses
+	b.dirCountCacheMu.Lock()
+	b.dirCountCache[dirPath] = dirCountEntry{
+		count:     count,
+		totalSize: totalSize,
+		cachedAt:  time.Now(),
+	}
+	b.dirCountCacheMu.Unlock()
+
 	return count, totalSize
 }
 
@@ -570,18 +606,30 @@ func DiscoverMediaFiles(root string, recursive bool, maxDepth *int) ([]string, e
 	return b.discoverMediaFiles(root, recursive, maxDepth)
 }
 
-// ClearCache clears the probe cache (useful after transcoding completes)
+// ClearCache clears the probe cache and directory count cache (useful after transcoding completes)
 func (b *Browser) ClearCache() {
 	b.cacheMu.Lock()
 	b.cache = make(map[string]*ffmpeg.ProbeResult)
 	b.cacheMu.Unlock()
+
+	b.dirCountCacheMu.Lock()
+	b.dirCountCache = make(map[string]dirCountEntry)
+	b.dirCountCacheMu.Unlock()
 }
 
-// InvalidateCache removes a specific path from the cache
+// InvalidateCache removes a specific path from the probe cache and invalidates
+// the directory count cache for the path's parent (so the counts refresh on next browse).
 func (b *Browser) InvalidateCache(path string) {
 	b.cacheMu.Lock()
 	delete(b.cache, path)
 	b.cacheMu.Unlock()
+
+	// Invalidate directory count cache for the parent directory since
+	// a transcode changes file sizes/counts within it.
+	parent := filepath.Dir(path)
+	b.dirCountCacheMu.Lock()
+	delete(b.dirCountCache, parent)
+	b.dirCountCacheMu.Unlock()
 }
 
 // ProbeFile probes a single file and returns its metadata
