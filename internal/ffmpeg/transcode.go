@@ -773,13 +773,23 @@ func FinalizeTranscode(inputPath, tempPath string, replace bool) (finalPath stri
 	originalModTime := inputInfo.ModTime()
 
 	if replace {
+		// When the input is already .mkv, finalPath == inputPath, so the copy
+		// overwrites the original in-place. In that case, skip removing the
+		// "original" (which is now the final file) to avoid data loss.
+		originalRemoved := false
+		if finalPath == inputPath {
+			originalRemoved = true
+		}
+
 		if err := copyFile(tempPath, finalPath); err != nil {
 			return "", fmt.Errorf("failed to copy temp to final location: %w", err)
 		}
 
-		if err := os.Remove(inputPath); err != nil {
-			_ = os.Remove(finalPath)
-			return "", fmt.Errorf("failed to remove original file: %w", err)
+		if !originalRemoved {
+			if err := os.Remove(inputPath); err != nil {
+				_ = os.Remove(finalPath)
+				return "", fmt.Errorf("failed to remove original file: %w", err)
+			}
 		}
 
 		_ = os.Chtimes(finalPath, originalModTime, originalModTime)
